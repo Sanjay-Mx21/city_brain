@@ -1,0 +1,64 @@
+# ─── Python ───
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+venv/
+.venv/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ─── Node ───
+node_modules/
+dist/
+build/
+.next/
+.nuxt/
+*.tsbuildinfo
+
+# ─── Environment ───
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+
+# ─── IDE ───
+.vscode/
+.idea/
+*.swp
+*.swo
+*.suo
+.history/
+
+# ─── OS ───
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Logs ───
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── Database ───
+*.db
+*.sqlite3
+
+# ─── Uploads / generated ───
+uploads/
+media/
+*.pid
+
+# ─── Ollama / AI model files ───
+*.gguf
+*.ggml
+*.bin
+models/

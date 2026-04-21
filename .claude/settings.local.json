@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(venv/Scripts/python -c \"import fastapi, sqlalchemy, asyncpg, pydantic_settings, jose, passlib, httpx; print\\('all core deps OK'\\)\")"
+    ]
+  }
+}
