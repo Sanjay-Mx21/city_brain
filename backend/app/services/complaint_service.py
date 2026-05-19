@@ -39,6 +39,7 @@ def complaint_to_response(c: Complaint) -> ComplaintResponse:
         priority=c.priority,
         ai_confidence=c.ai_confidence,
         status=c.status.value if hasattr(c.status, 'value') else c.status,
+        image_url=c.image_url,
         created_at=c.created_at,
         updated_at=c.updated_at,
         resolved_at=c.resolved_at,

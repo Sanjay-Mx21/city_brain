@@ -46,6 +46,20 @@ export const complaintAPI = {
   submit: (data) => api.post('/complaints/submit', data),
   getMine: (page = 1) => api.get(`/complaints/my?page=${page}`),
   track: (ticketId) => api.get(`/complaints/track/${ticketId}`),
+  uploadImage: (complaintId, file) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post(`/complaints/${complaintId}/image`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  transcribe: (audioBlob, language = '') => {
+    const fd = new FormData();
+    fd.append('file', audioBlob, 'recording.webm');
+    return api.post(`/complaints/transcribe?language=${language}`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 // ─── OFFICER ───

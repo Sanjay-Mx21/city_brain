@@ -94,6 +94,7 @@ class ComplaintResponse(BaseModel):
     updated_at: datetime
     resolved_at: Optional[datetime] = None
     sla_deadline: Optional[datetime] = None
+    image_url: Optional[str] = None
 
     class Config:
         from_attributes = True

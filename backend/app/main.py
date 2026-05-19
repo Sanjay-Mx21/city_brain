@@ -4,9 +4,11 @@ FastAPI entry point with all routes, middleware, and startup events.
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.database import engine, Base
@@ -25,6 +27,7 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     # Startup: Create tables if they don't exist
     logger.info("🧠 City Brain starting up...")
+    os.makedirs("uploads", exist_ok=True)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("✅ Database tables ready")
@@ -68,6 +71,9 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(complaints.router, prefix="/api/v1")
 app.include_router(officer.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
+
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 # ──────────────────────────────────────────────

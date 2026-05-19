@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { complaintAPI } from '../services/api';
-import { FileText, Clock, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
+import { FileText, Clock, CheckCircle2, AlertTriangle, Loader2, MapPin, ExternalLink } from 'lucide-react';
+
+function mapsUrl(lat, lon) {
+  return `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+}
 
 const STATUS_CONFIG = {
   pending: { color: 'bg-yellow-100 text-yellow-700', icon: Clock, label: 'Pending' },
@@ -74,12 +78,28 @@ export default function MyComplaints() {
                     {statusConf.label}
                   </span>
                 </div>
-                <div className="flex gap-6 text-sm text-slate-500">
+                <div className="flex gap-6 text-sm text-slate-500 flex-wrap">
                   <span>Dept: <strong className="text-slate-700">{c.department_name}</strong></span>
                   <span>Category: <strong className="text-slate-700 capitalize">{c.category?.replace(/_/g, ' ')}</strong></span>
                   <span>Priority: <strong className="text-slate-700">{c.priority}/5</strong></span>
-                  {c.location_text && <span>📍 {c.location_text}</span>}
+                  {c.latitude && c.longitude ? (
+                    <a
+                      href={mapsUrl(c.latitude, c.longitude)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-brand-600 hover:underline"
+                    >
+                      <MapPin className="w-3 h-3" />
+                      {c.location_text || 'View on Maps'}
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  ) : c.location_text ? (
+                    <span><MapPin className="w-3 h-3 inline" /> {c.location_text}</span>
+                  ) : null}
                 </div>
+                {c.image_url && (
+                  <img src={c.image_url} alt="Complaint" className="mt-3 h-28 rounded-lg object-cover border border-slate-100" />
+                )}
                 <p className="text-xs text-slate-400 mt-2">
                   Filed: {new Date(c.created_at).toLocaleString()}
                 </p>

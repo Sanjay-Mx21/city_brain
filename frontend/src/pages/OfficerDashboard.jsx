@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { officerAPI } from '../services/api';
-import { Loader2, CheckCircle2, ArrowUpCircle, Clock, AlertTriangle } from 'lucide-react';
+import { Loader2, CheckCircle2, Clock, AlertTriangle, MapPin, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+function mapsUrl(lat, lon) {
+  return `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+}
 
 export default function OfficerDashboard() {
   const [complaints, setComplaints] = useState([]);
@@ -91,9 +95,29 @@ export default function OfficerDashboard() {
                     <StatusBadge status={c.status} />
                   </div>
                   <h3 className="font-semibold text-slate-700">{c.description}</h3>
-                  <p className="text-sm text-slate-400 mt-1">
-                    {c.category?.replace(/_/g, ' ')} • {c.location_text || 'No location'} • Filed {new Date(c.created_at).toLocaleDateString()}
-                  </p>
+                  <div className="flex items-center gap-3 text-sm text-slate-400 mt-1 flex-wrap">
+                    <span>{c.category?.replace(/_/g, ' ')}</span>
+                    <span>•</span>
+                    {c.latitude && c.longitude ? (
+                      <a
+                        href={mapsUrl(c.latitude, c.longitude)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-brand-600 hover:underline"
+                      >
+                        <MapPin className="w-3 h-3" />
+                        {c.location_text || 'View on Maps'}
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    ) : (
+                      <span>{c.location_text || 'No location'}</span>
+                    )}
+                    <span>•</span>
+                    <span>Filed {new Date(c.created_at).toLocaleDateString()}</span>
+                  </div>
+                  {c.image_url && (
+                    <img src={c.image_url} alt="Complaint" className="mt-2 h-24 rounded-lg object-cover border border-slate-100" />
+                  )}
                 </div>
 
                 {/* Action Buttons */}

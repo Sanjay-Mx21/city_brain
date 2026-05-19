@@ -3,7 +3,13 @@ City Brain — Complaint Routes
 Submit complaints, view status, get history
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import os
+import uuid
+import logging
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+
+logger = logging.getLogger(__name__)
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -17,6 +23,10 @@ from app.services.complaint_service import (
     process_citizen_complaint, get_citizen_complaints, complaint_to_response
 )
 from app.services.notification_service import notify_complaint_created
+from app.services.transcription_service import transcribe_audio
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+UPLOAD_DIR = "uploads"
 
 router = APIRouter(prefix="/complaints", tags=["Complaints"])
 
@@ -92,7 +102,6 @@ async def track_complaint(
     db: AsyncSession = Depends(get_db),
 ):
     """Track a complaint by ticket ID (public — no auth required)."""
-    from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
     result = await db.execute(
@@ -106,3 +115,70 @@ async def track_complaint(
         raise HTTPException(status_code=404, detail=f"Ticket {ticket_id} not found")
 
     return complaint_to_response(complaint)
+
+
+@router.post("/{complaint_id}/image", response_model=ComplaintResponse)
+async def upload_complaint_image(
+    complaint_id: int,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Attach an image to an existing complaint."""
+    from sqlalchemy.orm import selectinload
+
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, WebP, or GIF images allowed")
+
+    result = await db.execute(
+        select(Complaint)
+        .where(Complaint.id == complaint_id)
+        .options(selectinload(Complaint.department), selectinload(Complaint.ward))
+    )
+    complaint = result.scalar_one_or_none()
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+
+    if complaint.citizen_id != current_user["user_id"] and current_user["role"] not in ("officer", "admin"):
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "jpg"
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    filepath = os.path.join(UPLOAD_DIR, filename)
+
+    contents = await file.read()
+    with open(filepath, "wb") as f:
+        f.write(contents)
+
+    complaint.image_url = f"/uploads/{filename}"
+    await db.commit()
+    await db.refresh(complaint)
+
+    return complaint_to_response(complaint)
+
+
+@router.post("/transcribe")
+async def transcribe_speech(
+    file: UploadFile = File(...),
+    language: str = Query(default=""),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Transcribe audio to text using local Whisper model.
+    Accepts any audio format the browser's MediaRecorder produces (webm, ogg, mp4).
+    """
+    audio_bytes = await file.read()
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="Empty audio file")
+
+    try:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        # Run blocking Whisper inference in a thread pool so it doesn't block the event loop
+        text = await loop.run_in_executor(
+            None, transcribe_audio, audio_bytes, language or None
+        )
+        return {"text": text}
+    except Exception as e:
+        logger.error(f"Transcription failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")

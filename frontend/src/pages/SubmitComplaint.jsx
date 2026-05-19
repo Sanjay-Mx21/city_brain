@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { complaintAPI } from '../services/api';
-import { Send, MapPin, Globe, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Send, MapPin, Globe, Loader2, CheckCircle2, Image, ExternalLink, Mic, MicOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const PRIORITY_COLORS = {
@@ -11,19 +11,94 @@ const PRIORITY_COLORS = {
   4: 'bg-orange-100 text-orange-700',
   5: 'bg-red-100 text-red-700',
 };
-
 const PRIORITY_LABELS = { 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Urgent', 5: 'Critical' };
+
+function mapsUrl(lat, lon) {
+  return `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+}
 
 export default function SubmitComplaint() {
   const [text, setText] = useState('');
   const [language, setLanguage] = useState('');
+  const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+
+  const fileRef = useRef();
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current?.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
+
+  const toggleMic = async () => {
+    if (isRecording) {
+      // Stop → triggers onstop which sends to Whisper
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        // Kill mic stream
+        stream.getTracks().forEach((t) => t.stop());
+        setIsRecording(false);
+        setIsTranscribing(true);
+
+        try {
+          const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const { data } = await complaintAPI.transcribe(blob, language);
+          if (data.text) {
+            setText((prev) => (prev ? prev + ' ' + data.text : data.text));
+            toast.success('Voice transcribed!');
+          } else {
+            toast.error('No speech detected — try again.');
+          }
+        } catch {
+          toast.error('Transcription failed. Is the backend running?');
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      toast.error('Microphone access denied. Please allow mic access and try again.');
+    }
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImage(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!text.trim()) return;
+
+    // Stop recording if active before submitting
+    if (isRecording) mediaRecorderRef.current?.stop();
 
     setLoading(true);
     setResult(null);
@@ -32,12 +107,11 @@ export default function SubmitComplaint() {
       const payload = { text: text.trim() };
       if (language) payload.language = language;
 
-      // Try to get user location
       if (navigator.geolocation) {
         try {
-          const pos = await new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
-          });
+          const pos = await new Promise((resolve, reject) =>
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 })
+          );
           payload.latitude = pos.coords.latitude;
           payload.longitude = pos.coords.longitude;
         } catch {
@@ -46,6 +120,16 @@ export default function SubmitComplaint() {
       }
 
       const { data } = await complaintAPI.submit(payload);
+
+      if (image && data.tickets?.length > 0) {
+        try {
+          const { data: updated } = await complaintAPI.uploadImage(data.tickets[0].id, image);
+          data.tickets[0] = updated;
+        } catch {
+          toast.error('Complaint filed but image upload failed');
+        }
+      }
+
       setResult(data);
       toast.success(`${data.total_complaints_detected} complaint(s) registered!`);
     } catch (err) {
@@ -59,7 +143,7 @@ export default function SubmitComplaint() {
     <div className="max-w-3xl mx-auto px-4 py-10">
       <h1 className="text-2xl font-bold text-slate-800 mb-2">Report a Civic Issue</h1>
       <p className="text-slate-500 mb-8">
-        Describe your problem in any language. Our AI will understand it, classify it,
+        Describe your problem in any language — type or speak. Our AI will classify it
         and route it to the right department.
       </p>
 
@@ -83,23 +167,101 @@ export default function SubmitComplaint() {
             </select>
           </div>
 
-          {/* Complaint text */}
+          {/* Complaint text with mic button */}
           <div>
             <label className="block text-sm font-medium text-slate-600 mb-1.5">
               Describe your complaint
             </label>
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              rows={6}
-              placeholder="e.g., Our road has been broken for 3 months and the streetlight near the park is not working. Also garbage is piling up near the bus stop."
-              className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition text-sm resize-none"
-              required
-              minLength={5}
+            <div className="relative">
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={6}
+                placeholder={
+                  isRecording
+                    ? 'Listening… speak now'
+                    : 'Type your complaint, or tap the mic to speak in English, Hindi, or Kannada.'
+                }
+                className={`w-full px-4 py-3 pr-14 rounded-lg border transition text-sm resize-none outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 ${
+                  isRecording ? 'border-red-400 bg-red-50' : 'border-slate-300'
+                }`}
+                required
+                minLength={5}
+              />
+
+              {/* Mic button — bottom-right of textarea */}
+              <button
+                type="button"
+                onClick={toggleMic}
+                disabled={isTranscribing}
+                title={isRecording ? 'Stop recording' : 'Speak your complaint'}
+                className={`absolute bottom-3 right-3 p-2 rounded-full transition ${
+                  isRecording
+                    ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-200'
+                    : isTranscribing
+                    ? 'bg-brand-400 text-white animate-spin'
+                    : 'bg-slate-100 text-slate-500 hover:bg-brand-100 hover:text-brand-600'
+                }`}
+              >
+                {isTranscribing
+                  ? <Loader2 className="w-5 h-5" />
+                  : isRecording
+                  ? <MicOff className="w-5 h-5" />
+                  : <Mic className="w-5 h-5" />}
+              </button>
+            </div>
+
+            {isRecording && (
+              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                Recording… tap mic to stop
+              </p>
+            )}
+            {isTranscribing && (
+              <p className="text-xs text-brand-500 mt-1 flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Whisper is transcribing your audio…
+              </p>
+            )}
+            {!isRecording && !isTranscribing && (
+              <p className="text-xs text-slate-400 mt-1">
+                Tip: You can mention multiple issues in one message. We'll create separate tickets for each.
+              </p>
+            )}
+          </div>
+
+          {/* Image upload */}
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1.5">
+              <Image className="w-4 h-4 inline mr-1" />
+              Attach a photo (optional)
+            </label>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="hidden"
             />
-            <p className="text-xs text-slate-400 mt-1">
-              Tip: You can mention multiple issues in one message. We'll create separate tickets for each.
-            </p>
+            {imagePreview ? (
+              <div className="relative inline-block">
+                <img src={imagePreview} alt="Preview" className="h-32 rounded-lg border border-slate-200 object-cover" />
+                <button
+                  type="button"
+                  onClick={() => { setImage(null); setImagePreview(null); fileRef.current.value = ''; }}
+                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
+                >×</button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileRef.current.click()}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-dashed border-slate-300 text-slate-500 text-sm hover:border-brand-400 hover:text-brand-600 transition"
+              >
+                <Image className="w-4 h-4" />
+                Click to upload a photo
+              </button>
+            )}
           </div>
 
           {/* Submit */}
@@ -122,7 +284,6 @@ export default function SubmitComplaint() {
           </button>
         </form>
       ) : (
-        /* Results */
         <div className="space-y-6">
           <div className="bg-green-50 border border-green-200 rounded-xl p-6">
             <div className="flex items-center gap-3 mb-3">
@@ -134,7 +295,6 @@ export default function SubmitComplaint() {
             </p>
           </div>
 
-          {/* Individual tickets */}
           {result.tickets?.map((ticket) => (
             <div key={ticket.ticket_id} className="bg-white border border-slate-200 rounded-xl p-6">
               <div className="flex items-start justify-between mb-4">
@@ -146,6 +306,10 @@ export default function SubmitComplaint() {
                   {PRIORITY_LABELS[ticket.priority]}
                 </span>
               </div>
+
+              {ticket.image_url && (
+                <img src={ticket.image_url} alt="Complaint" className="w-full max-h-48 object-cover rounded-lg mb-4 border border-slate-100" />
+              )}
 
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
@@ -166,6 +330,19 @@ export default function SubmitComplaint() {
                     </p>
                   </div>
                 )}
+                {ticket.latitude && ticket.longitude && (
+                  <div>
+                    <p className="text-slate-400">GPS</p>
+                    <a
+                      href={mapsUrl(ticket.latitude, ticket.longitude)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-brand-600 hover:underline flex items-center gap-1"
+                    >
+                      <ExternalLink className="w-3 h-3" /> Open in Google Maps
+                    </a>
+                  </div>
+                )}
                 <div>
                   <p className="text-slate-400">AI Confidence</p>
                   <p className="font-medium text-slate-700">
@@ -176,10 +353,9 @@ export default function SubmitComplaint() {
             </div>
           ))}
 
-          {/* Actions */}
           <div className="flex gap-3">
             <button
-              onClick={() => { setResult(null); setText(''); }}
+              onClick={() => { setResult(null); setText(''); setImage(null); setImagePreview(null); }}
               className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition"
             >
               Report Another Issue

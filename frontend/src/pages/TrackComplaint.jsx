@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { complaintAPI } from '../services/api';
-import { Brain, Search, Loader2, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import { Brain, Search, Loader2, CheckCircle2, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
+
+function mapsUrl(lat, lon) {
+  return `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+}
 
 export default function TrackComplaint() {
   const { ticketId } = useParams();
@@ -66,16 +70,35 @@ export default function TrackComplaint() {
             <StatusBadge status={complaint.status} />
           </div>
 
+          {complaint.image_url && (
+            <img src={complaint.image_url} alt="Complaint" className="w-full max-h-56 object-cover rounded-xl border border-slate-100" />
+          )}
+
           <div className="grid grid-cols-2 gap-4 text-sm">
             <Detail label="Department" value={complaint.department_name} />
             <Detail label="Category" value={complaint.category?.replace(/_/g, ' ')} />
             <Detail label="Priority" value={`${complaint.priority}/5`} />
-            <Detail label="Location" value={complaint.location_text || 'N/A'} />
             <Detail label="Filed On" value={new Date(complaint.created_at).toLocaleString()} />
             <Detail label="Last Updated" value={new Date(complaint.updated_at).toLocaleString()} />
             {complaint.resolved_at && (
               <Detail label="Resolved On" value={new Date(complaint.resolved_at).toLocaleString()} />
             )}
+            <div>
+              <p className="text-slate-400">Location</p>
+              {complaint.latitude && complaint.longitude ? (
+                <a
+                  href={mapsUrl(complaint.latitude, complaint.longitude)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-brand-600 hover:underline flex items-center gap-1 capitalize"
+                >
+                  {complaint.location_text || 'View location'}
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              ) : (
+                <p className="font-medium text-slate-700 capitalize">{complaint.location_text || 'N/A'}</p>
+              )}
+            </div>
           </div>
 
           {complaint.translated_text && complaint.original_language !== 'en' && (
