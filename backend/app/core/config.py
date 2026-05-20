@@ -3,8 +3,10 @@ City Brain — Application Configuration
 Loads all settings from environment variables via .env file
 """
 
+from typing import Any, Optional
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
-from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -15,8 +17,8 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-me-in-production"
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/citybrain"
-    DATABASE_URL_SYNC: str = "postgresql://postgres:postgres@localhost:5432/citybrain"
+    DATABASE_URL: str = "sqlite+aiosqlite:///./citybrain.db"
+    DATABASE_URL_SYNC: str = "sqlite:///./citybrain.db"
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -45,6 +47,19 @@ class Settings(BaseSettings):
 
     # Logging
     LOG_LEVEL: str = "INFO"
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def parse_debug(cls, value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on", "debug", "dev", "development"}:
+                return True
+            if normalized in {"0", "false", "no", "off", "release", "prod", "production"}:
+                return False
+        return bool(value)
 
     class Config:
         env_file = ".env"

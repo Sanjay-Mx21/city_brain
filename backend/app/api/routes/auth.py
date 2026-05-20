@@ -15,6 +15,10 @@ from app.schemas.schemas import UserRegister, UserLogin, TokenResponse, UserResp
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
+def role_value(role) -> str:
+    return role.value if hasattr(role, "value") else role
+
+
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(data: UserRegister, db: AsyncSession = Depends(get_db)):
     """Register a new citizen account."""
@@ -31,14 +35,14 @@ async def register(data: UserRegister, db: AsyncSession = Depends(get_db)):
         phone=data.phone,
         email=data.email,
         password_hash=hash_password(data.password),
-        role=UserRole.CITIZEN,
+        role=UserRole.CITIZEN.value,
         preferred_language=data.preferred_language,
     )
     db.add(user)
     await db.commit()
     await db.refresh(user)
 
-    token = create_access_token({"sub": str(user.id), "role": user.role.value})
+    token = create_access_token({"sub": str(user.id), "role": role_value(user.role)})
     return TokenResponse(
         access_token=token,
         user=UserResponse.model_validate(user),
@@ -57,7 +61,7 @@ async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
             detail="Invalid phone or password"
         )
 
-    token = create_access_token({"sub": str(user.id), "role": user.role.value})
+    token = create_access_token({"sub": str(user.id), "role": role_value(user.role)})
     return TokenResponse(
         access_token=token,
         user=UserResponse.model_validate(user),

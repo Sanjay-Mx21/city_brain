@@ -26,6 +26,7 @@ export default function SubmitComplaint() {
   const [result, setResult] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [voiceSource, setVoiceSource] = useState('');
 
   const fileRef = useRef();
   const mediaRecorderRef = useRef(null);
@@ -64,15 +65,18 @@ export default function SubmitComplaint() {
 
         try {
           const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-          const { data } = await complaintAPI.transcribe(blob, language);
-          if (data.text) {
-            setText((prev) => (prev ? prev + ' ' + data.text : data.text));
-            toast.success('Voice transcribed!');
+          const { data } = await complaintAPI.transcribe(blob, language, true);
+          const englishText = data.english_text || data.text;
+          if (englishText) {
+            setText((prev) => (prev ? `${prev} ${englishText}` : englishText));
+            setLanguage('en');
+            setVoiceSource(data.detected_language || language || 'auto');
+            toast.success(data.translated ? 'Voice translated to English!' : 'Voice transcribed!');
           } else {
             toast.error('No speech detected — try again.');
           }
         } catch {
-          toast.error('Transcription failed. Is the backend running?');
+          toast.error('Voice translation failed. Is the backend running?');
         } finally {
           setIsTranscribing(false);
         }
@@ -220,7 +224,12 @@ export default function SubmitComplaint() {
             {isTranscribing && (
               <p className="text-xs text-brand-500 mt-1 flex items-center gap-1">
                 <Loader2 className="w-3 h-3 animate-spin" />
-                Whisper is transcribing your audio…
+                Whisper is translating your audio to English...
+              </p>
+            )}
+            {voiceSource && !isRecording && !isTranscribing && (
+              <p className="text-xs text-green-600 mt-1">
+                Last voice input translated to English from {voiceSource}.
               </p>
             )}
             {!isRecording && !isTranscribing && (

@@ -61,4 +61,4 @@ media/
 *.gguf
 *.ggml
 *.bin
-models/
+/models/

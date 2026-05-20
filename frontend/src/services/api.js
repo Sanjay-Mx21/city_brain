@@ -53,10 +53,11 @@ export const complaintAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
-  transcribe: (audioBlob, language = '') => {
+  transcribe: (audioBlob, language = '', translate = true) => {
     const fd = new FormData();
     fd.append('file', audioBlob, 'recording.webm');
-    return api.post(`/complaints/transcribe?language=${language}`, fd, {
+    return api.post('/complaints/transcribe', fd, {
+      params: { language, translate },
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },

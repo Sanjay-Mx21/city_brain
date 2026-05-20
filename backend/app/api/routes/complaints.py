@@ -161,10 +161,11 @@ async def upload_complaint_image(
 async def transcribe_speech(
     file: UploadFile = File(...),
     language: str = Query(default=""),
+    translate: bool = Query(default=True),
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Transcribe audio to text using local Whisper model.
+    Transcribe audio with local Whisper and translate speech to English by default.
     Accepts any audio format the browser's MediaRecorder produces (webm, ogg, mp4).
     """
     audio_bytes = await file.read()
@@ -175,10 +176,10 @@ async def transcribe_speech(
         import asyncio
         loop = asyncio.get_event_loop()
         # Run blocking Whisper inference in a thread pool so it doesn't block the event loop
-        text = await loop.run_in_executor(
-            None, transcribe_audio, audio_bytes, language or None
+        result = await loop.run_in_executor(
+            None, transcribe_audio, audio_bytes, language or None, translate
         )
-        return {"text": text}
+        return result
     except Exception as e:
         logger.error(f"Transcription failed: {e}")
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")

@@ -33,8 +33,8 @@ async def get_dashboard(
             Ward.id,
             Ward.name,
             func.count(Complaint.id).label("total"),
-            func.count(Complaint.id).filter(Complaint.status == ComplaintStatus.PENDING).label("pending"),
-            func.count(Complaint.id).filter(Complaint.status == ComplaintStatus.RESOLVED).label("resolved"),
+            func.count(Complaint.id).filter(Complaint.status == ComplaintStatus.PENDING.value).label("pending"),
+            func.count(Complaint.id).filter(Complaint.status == ComplaintStatus.RESOLVED.value).label("resolved"),
         )
         .outerjoin(Complaint, Complaint.ward_id == Ward.id)
         .group_by(Ward.id, Ward.name)
@@ -58,8 +58,8 @@ async def get_dashboard(
             Department.id,
             Department.name,
             func.count(Complaint.id).label("total"),
-            func.count(Complaint.id).filter(Complaint.status == ComplaintStatus.PENDING).label("pending"),
-            func.count(Complaint.id).filter(Complaint.status == ComplaintStatus.RESOLVED).label("resolved"),
+            func.count(Complaint.id).filter(Complaint.status == ComplaintStatus.PENDING.value).label("pending"),
+            func.count(Complaint.id).filter(Complaint.status == ComplaintStatus.RESOLVED.value).label("resolved"),
         )
         .outerjoin(Complaint, Complaint.department_id == Department.id)
         .group_by(Department.id, Department.name)

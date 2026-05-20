@@ -88,7 +88,7 @@ async def process_citizen_complaint(
             ward_id=ward.id if ward else None,
             priority=complaint_data.severity,
             ai_confidence=complaint_data.confidence,
-            status=ComplaintStatus.PENDING,
+            status=ComplaintStatus.PENDING.value,
             sla_deadline=sla_deadline,
         )
 
@@ -101,7 +101,7 @@ async def process_citizen_complaint(
         history = ComplaintStatusHistory(
             complaint_id=complaint.id,
             old_status=None,
-            new_status=ComplaintStatus.PENDING,
+            new_status=ComplaintStatus.PENDING.value,
             changed_by_id=citizen_id,
             notes="Complaint auto-created by City Brain AI",
         )
@@ -168,21 +168,24 @@ async def get_citizen_complaints(
 
 
 async def get_complaints_for_officer(
-    db: AsyncSession, officer_user_id: int, department_id: int,
+    db: AsyncSession, officer_user_id: int, department_id: Optional[int],
     status_filter: Optional[str] = None,
     page: int = 1, per_page: int = 20
 ) -> tuple[list[Complaint], int]:
     """Get complaints assigned to a department (for officer view)."""
-    conditions = [Complaint.department_id == department_id]
+    conditions = []
+    if department_id is not None:
+        conditions.append(Complaint.department_id == department_id)
     if status_filter:
         conditions.append(Complaint.status == status_filter)
 
-    count_q = select(func.count(Complaint.id)).where(and_(*conditions))
+    count_q = select(func.count(Complaint.id))
+    if conditions:
+        count_q = count_q.where(and_(*conditions))
     total = (await db.execute(count_q)).scalar() or 0
 
     query = (
         select(Complaint)
-        .where(and_(*conditions))
         .options(
             selectinload(Complaint.department),
             selectinload(Complaint.ward),
@@ -192,6 +195,8 @@ async def get_complaints_for_officer(
         .offset((page - 1) * per_page)
         .limit(per_page)
     )
+    if conditions:
+        query = query.where(and_(*conditions))
     result = await db.execute(query)
     complaints = result.scalars().all()
 
@@ -214,11 +219,11 @@ async def update_complaint_status(
     old_status = complaint.status
 
     complaint.status = update.status
-    if update.status == ComplaintStatus.RESOLVED:
+    if update.status == ComplaintStatus.RESOLVED.value:
         complaint.resolved_at = datetime.utcnow()
-    if update.status == ComplaintStatus.ESCALATED:
+    if update.status == ComplaintStatus.ESCALATED.value:
         complaint.escalated_at = datetime.utcnow()
-    if update.status in (ComplaintStatus.ASSIGNED, ComplaintStatus.IN_PROGRESS):
+    if update.status in (ComplaintStatus.ASSIGNED.value, ComplaintStatus.IN_PROGRESS.value):
         complaint.assigned_officer_id = officer_id
     if update.notes:
         complaint.resolution_notes = update.notes
@@ -246,7 +251,10 @@ async def get_dashboard_stats(db: AsyncSession) -> dict:
     status_counts = await db.execute(
         select(Complaint.status, func.count(Complaint.id)).group_by(Complaint.status)
     )
-    status_map = {row[0].value: row[1] for row in status_counts}
+    status_map = {
+        row[0].value if hasattr(row[0], "value") else row[0]: row[1]
+        for row in status_counts
+    }
 
     today_count = (await db.execute(
         select(func.count(Complaint.id)).where(Complaint.created_at >= today_start)
@@ -256,13 +264,16 @@ async def get_dashboard_stats(db: AsyncSession) -> dict:
         select(func.count(Complaint.id)).where(Complaint.created_at >= week_start)
     )).scalar() or 0
 
-    avg_resolution = (await db.execute(
-        select(
-            func.avg(
-                func.extract("epoch", Complaint.resolved_at - Complaint.created_at) / 3600
-            )
-        ).where(Complaint.resolved_at.isnot(None))
-    )).scalar()
+    resolved_rows = await db.execute(
+        select(Complaint.created_at, Complaint.resolved_at)
+        .where(Complaint.resolved_at.isnot(None))
+    )
+    durations = [
+        (resolved_at - created_at).total_seconds() / 3600
+        for created_at, resolved_at in resolved_rows
+        if created_at and resolved_at
+    ]
+    avg_resolution = sum(durations) / len(durations) if durations else None
 
     total = sum(status_map.values())
 
@@ -298,7 +309,7 @@ async def get_heatmap_data(db: AsyncSession) -> list[dict]:
         {
             "latitude": row[0],
             "longitude": row[1],
-            "category": row[2].value,
+            "category": row[2].value if hasattr(row[2], "value") else row[2],
             "intensity": row[3] or 2,
         }
         for row in result

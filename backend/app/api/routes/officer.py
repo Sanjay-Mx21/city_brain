@@ -4,7 +4,7 @@ View complaint queue, update status, get personal stats
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -35,11 +35,11 @@ async def get_complaint_queue(
         select(Officer).where(Officer.user_id == current_user["user_id"])
     )
     officer = result.scalar_one_or_none()
-    if not officer:
+    if not officer and current_user["role"] != "admin":
         raise HTTPException(status_code=404, detail="Officer profile not found")
 
     complaints, total = await get_complaints_for_officer(
-        db, current_user["user_id"], officer.department_id,
+        db, current_user["user_id"], officer.department_id if officer else None,
         status_filter=status_filter, page=page, per_page=per_page
     )
 
@@ -60,8 +60,9 @@ async def update_status(
 ):
     """Update complaint status (officer action)."""
     valid_statuses = {
-        ComplaintStatus.ASSIGNED, ComplaintStatus.IN_PROGRESS,
-        ComplaintStatus.RESOLVED, ComplaintStatus.ESCALATED, ComplaintStatus.CLOSED,
+        ComplaintStatus.ASSIGNED.value, ComplaintStatus.IN_PROGRESS.value,
+        ComplaintStatus.RESOLVED.value, ComplaintStatus.ESCALATED.value,
+        ComplaintStatus.CLOSED.value,
     }
     if update.status not in valid_statuses:
         raise HTTPException(
@@ -98,30 +99,30 @@ async def get_officer_stats(
         select(Officer).where(Officer.user_id == officer_id)
     )
     officer = result.scalar_one_or_none()
-    if not officer:
+    if not officer and current_user["role"] != "admin":
         raise HTTPException(status_code=404, detail="Officer profile not found")
 
-    dept_id = officer.department_id
+    dept_id = officer.department_id if officer else None
 
     # Count by status
-    status_counts = await db.execute(
-        select(Complaint.status, func.count(Complaint.id))
-        .where(Complaint.department_id == dept_id)
-        .group_by(Complaint.status)
-    )
+    status_query = select(Complaint.status, func.count(Complaint.id)).group_by(Complaint.status)
+    if dept_id is not None:
+        status_query = status_query.where(Complaint.department_id == dept_id)
+    status_counts = await db.execute(status_query)
     counts = {str(row[0].value if hasattr(row[0], 'value') else row[0]): row[1] for row in status_counts}
 
-    # Average resolution time
-    avg_hours = (await db.execute(
-        select(
-            func.avg(func.extract("epoch", Complaint.resolved_at - Complaint.created_at) / 3600)
-        ).where(
-            and_(
-                Complaint.department_id == dept_id,
-                Complaint.resolved_at.isnot(None),
-            )
-        )
-    )).scalar()
+    resolved_query = select(Complaint.created_at, Complaint.resolved_at).where(
+        Complaint.resolved_at.isnot(None)
+    )
+    if dept_id is not None:
+        resolved_query = resolved_query.where(Complaint.department_id == dept_id)
+    resolved_rows = await db.execute(resolved_query)
+    durations = [
+        (resolved_at - created_at).total_seconds() / 3600
+        for created_at, resolved_at in resolved_rows
+        if created_at and resolved_at
+    ]
+    avg_hours = sum(durations) / len(durations) if durations else None
 
     total = sum(counts.values())
 
