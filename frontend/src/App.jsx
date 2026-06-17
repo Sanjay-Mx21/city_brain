@@ -12,7 +12,9 @@ import MyComplaints from './pages/MyComplaints';
 import TrackComplaint from './pages/TrackComplaint';
 import OfficerDashboard from './pages/OfficerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import AssistantPage from './pages/AssistantPage';
 import Navbar from './components/common/Navbar';
+import { dashboardPathForRole } from './utils/authRoutes';
 
 function ProtectedRoute({ children, allowedRoles }) {
   const { isAuthenticated, user, loading } = useAuth();
@@ -31,8 +33,8 @@ function AppRoutes() {
       {isAuthenticated && <Navbar />}
       <Routes>
         {/* Public */}
-        <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <LoginPage />} />
-        <Route path="/register" element={isAuthenticated ? <Navigate to="/" /> : <RegisterPage />} />
+        <Route path="/login" element={isAuthenticated ? <Navigate to={dashboardPathForRole(user?.role)} replace /> : <LoginPage />} />
+        <Route path="/register" element={isAuthenticated ? <Navigate to={dashboardPathForRole(user?.role)} replace /> : <RegisterPage />} />
         <Route path="/track/:ticketId" element={<TrackComplaint />} />
 
         {/* Citizen */}
@@ -51,6 +53,11 @@ function AppRoutes() {
         <Route path="/my-complaints" element={
           <ProtectedRoute allowedRoles={['citizen']}>
             <MyComplaints />
+          </ProtectedRoute>
+        } />
+        <Route path="/assistant" element={
+          <ProtectedRoute allowedRoles={['citizen']}>
+            <AssistantPage />
           </ProtectedRoute>
         } />
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../utils/AuthContext';
-import { PlusCircle, FileText, Search, MapPin, Zap, Globe } from 'lucide-react';
+import { Bot, PlusCircle, FileText, Search, MapPin, Zap, Globe } from 'lucide-react';
 
 export default function CitizenHome() {
   const { user } = useAuth();
@@ -19,7 +19,7 @@ export default function CitizenHome() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
         <Link
           to="/submit"
           className="flex items-center gap-4 p-6 bg-brand-600 text-white rounded-2xl hover:bg-brand-700 transition group"
@@ -43,6 +43,19 @@ export default function CitizenHome() {
           <div>
             <h3 className="text-lg font-semibold text-slate-700">My Complaints</h3>
             <p className="text-slate-400 text-sm">Track status of your reported issues</p>
+          </div>
+        </Link>
+
+        <Link
+          to="/assistant"
+          className="flex items-center gap-4 p-6 bg-white border border-slate-200 rounded-2xl hover:border-brand-300 hover:shadow-sm transition group"
+        >
+          <div className="bg-slate-100 p-3 rounded-xl group-hover:bg-brand-50 transition">
+            <Bot className="w-7 h-7 text-slate-600 group-hover:text-brand-600" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-slate-700">Assistant</h3>
+            <p className="text-slate-400 text-sm">Get help filing or tracking tickets</p>
           </div>
         </Link>
       </div>

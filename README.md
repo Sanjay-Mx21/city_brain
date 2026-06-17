@@ -88,7 +88,7 @@ See `backend/.env.example` for all required variables.
 |-------|------|---------|
 | Frontend | React.js + TailwindCSS | Citizen portal + Admin dashboard |
 | Backend | FastAPI (Python) | REST API, LLM orchestration |
-| LLM | GPT-4 Turbo (OpenAI) | Complaint understanding + classification |
+| LLM | Open-source LLM via Ollama | Complaint understanding + classification |
 | Translation | Bhashini API | Kannada/Hindi → English |
 | Speech-to-Text | OpenAI Whisper | Voice input transcription |
 | WhatsApp | Twilio API | Citizen messaging |
@@ -99,3 +99,9 @@ See `backend/.env.example` for all required variables.
 ## 📄 License
 
 Academic project — Ramaiah University of Applied Sciences, 2026
+## Additional Project Notes
+
+- Production setup: `docs/PRODUCTION_SETUP.md`
+- Fine-tuning scaffold: `docs/FINE_TUNING.md`
+- WhatsApp webhook: `POST /api/v1/whatsapp/webhook`
+- Citizen assistant: `/assistant`

@@ -3,6 +3,8 @@ City Brain — Officer Routes
 View complaint queue, update status, get personal stats
 """
 
+from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +26,8 @@ router = APIRouter(prefix="/officer", tags=["Officer Portal"])
 @router.get("/queue", response_model=ComplaintListResponse)
 async def get_complaint_queue(
     status_filter: str = Query(None, description="Filter by status"),
+    department_id: int | None = Query(None, description="0 for all departments, or a department id"),
+    sort_by: str = Query("priority", pattern="^(priority|latest)$"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(require_role(["officer", "admin"])),
@@ -38,9 +42,16 @@ async def get_complaint_queue(
     if not officer and current_user["role"] != "admin":
         raise HTTPException(status_code=404, detail="Officer profile not found")
 
+    if department_id == 0:
+        effective_department_id = None
+    elif department_id is not None:
+        effective_department_id = department_id
+    else:
+        effective_department_id = officer.department_id if officer else None
+
     complaints, total = await get_complaints_for_officer(
-        db, current_user["user_id"], officer.department_id if officer else None,
-        status_filter=status_filter, page=page, per_page=per_page
+        db, current_user["user_id"], effective_department_id,
+        status_filter=status_filter, sort_by=sort_by, page=page, per_page=per_page
     )
 
     return ComplaintListResponse(
@@ -75,8 +86,13 @@ async def update_status(
             db, complaint_id, update, current_user["user_id"]
         )
 
-        # Notify citizen of status change
-        # await notify_status_update(citizen_phone, complaint.ticket_id, update.status)
+        if complaint.citizen:
+            await notify_status_update(
+                complaint.citizen.phone,
+                complaint.ticket_id,
+                update.status,
+                complaint.citizen.preferred_language or "en",
+            )
 
         return {
             "message": f"Complaint {complaint.ticket_id} updated to {update.status}",
@@ -89,6 +105,7 @@ async def update_status(
 
 @router.get("/stats", response_model=OfficerStats)
 async def get_officer_stats(
+    department_id: int | None = Query(None, description="0 for all departments, or a department id"),
     current_user: dict = Depends(require_role(["officer", "admin"])),
     db: AsyncSession = Depends(get_db),
 ):
@@ -102,7 +119,12 @@ async def get_officer_stats(
     if not officer and current_user["role"] != "admin":
         raise HTTPException(status_code=404, detail="Officer profile not found")
 
-    dept_id = officer.department_id if officer else None
+    if department_id == 0:
+        dept_id = None
+    elif department_id is not None:
+        dept_id = department_id
+    else:
+        dept_id = officer.department_id if officer else None
 
     # Count by status
     status_query = select(Complaint.status, func.count(Complaint.id)).group_by(Complaint.status)
@@ -125,6 +147,23 @@ async def get_officer_stats(
     avg_hours = sum(durations) / len(durations) if durations else None
 
     total = sum(counts.values())
+    now = datetime.utcnow()
+    sla_query = select(Complaint.status, Complaint.sla_deadline).where(
+        Complaint.sla_deadline.isnot(None)
+    )
+    if dept_id is not None:
+        sla_query = sla_query.where(Complaint.department_id == dept_id)
+    sla_rows = await db.execute(sla_query)
+    overdue = 0
+    due_soon = 0
+    for status, sla_deadline in sla_rows:
+        status_value = status.value if hasattr(status, "value") else status
+        if status_value in (ComplaintStatus.RESOLVED.value, ComplaintStatus.CLOSED.value):
+            continue
+        if sla_deadline < now:
+            overdue += 1
+        elif sla_deadline <= now + timedelta(hours=24):
+            due_soon += 1
 
     return OfficerStats(
         total_assigned=total,
@@ -132,5 +171,7 @@ async def get_officer_stats(
         in_progress=counts.get("in_progress", 0),
         resolved=counts.get("resolved", 0),
         escalated=counts.get("escalated", 0),
+        overdue=overdue,
+        due_soon=due_soon,
         avg_resolution_hours=round(avg_hours, 1) if avg_hours else None,
     )

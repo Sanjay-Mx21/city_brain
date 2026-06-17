@@ -141,6 +141,9 @@ class Complaint(TimestampMixin, Base):
     ai_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String(40), default=ComplaintStatus.PENDING.value, nullable=False)
     image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    image_verification_status: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    image_verification_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    image_verification_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     resolution_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

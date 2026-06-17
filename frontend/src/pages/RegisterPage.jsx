@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../utils/AuthContext';
 import { authAPI } from '../services/api';
+import { goToDashboardForUser } from '../utils/authRoutes';
 import { Brain, User, Phone, Lock, Globe } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -14,7 +15,6 @@ export default function RegisterPage() {
   });
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
-  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,7 +23,7 @@ export default function RegisterPage() {
       const { data } = await authAPI.register(form);
       login(data.access_token, data.user);
       toast.success('Account created!');
-      navigate('/');
+      goToDashboardForUser(data.user);
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Registration failed');
     } finally {

@@ -63,13 +63,27 @@ export const complaintAPI = {
   },
 };
 
-// ─── OFFICER ───
+// ASSISTANT
+export const assistantAPI = {
+  chat: (data) => api.post('/assistant/chat', data),
+};
+
+// OFFICER
 export const officerAPI = {
-  getQueue: (status, page = 1) =>
-    api.get(`/officer/queue?page=${page}${status ? `&status_filter=${status}` : ''}`),
+  getQueue: (status, page = 1, departmentId = 0, sortBy = 'priority') =>
+    api.get('/officer/queue', {
+      params: {
+        page,
+        department_id: departmentId,
+        sort_by: sortBy,
+        ...(status ? { status_filter: status } : {}),
+      },
+    }),
   updateStatus: (complaintId, data) =>
     api.patch(`/officer/complaints/${complaintId}/status`, data),
-  getStats: () => api.get('/officer/stats'),
+  getStats: (departmentId = 0) => api.get('/officer/stats', {
+    params: { department_id: departmentId },
+  }),
 };
 
 // ─── ADMIN ───

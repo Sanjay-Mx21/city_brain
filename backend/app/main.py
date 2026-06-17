@@ -12,7 +12,8 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.api.routes import auth, complaints, officer, admin
+from app.core.schema_updates import ensure_local_schema_updates
+from app.api.routes import admin, assistant, auth, complaints, officer, whatsapp
 
 # Configure logging
 logging.basicConfig(
@@ -30,6 +31,7 @@ async def lifespan(app: FastAPI):
     os.makedirs("uploads", exist_ok=True)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await ensure_local_schema_updates(conn)
     logger.info("✅ Database tables ready")
 
     yield
@@ -71,6 +73,8 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(complaints.router, prefix="/api/v1")
 app.include_router(officer.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
+app.include_router(assistant.router, prefix="/api/v1")
+app.include_router(whatsapp.router, prefix="/api/v1")
 
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")

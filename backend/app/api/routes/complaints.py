@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.models.models import Complaint
+from app.models.models import Complaint, User
 from app.schemas.schemas import (
     ComplaintSubmit, ComplaintSubmitResponse, ComplaintResponse,
     ComplaintListResponse
@@ -22,6 +22,8 @@ from app.schemas.schemas import (
 from app.services.complaint_service import (
     process_citizen_complaint, get_citizen_complaints, complaint_to_response
 )
+from app.services.image_verification_service import verify_image_evidence
+from app.services.localization_service import localize
 from app.services.notification_service import notify_complaint_created
 from app.services.transcription_service import transcribe_audio
 
@@ -62,12 +64,24 @@ async def submit_complaint(
             ticket_ids.append(c.ticket_id)
             ticket_responses.append(complaint_to_response(c))
 
-        # Send notification (async, don't block response)
-        # In production, this would be a background task
-        # await notify_complaint_created(phone, ticket_ids)
+        user_result = await db.execute(select(User).where(User.id == current_user["user_id"]))
+        citizen = user_result.scalar_one_or_none()
+        response_language = (citizen.preferred_language if citizen else None) or data.language or "en"
+        if citizen:
+            await notify_complaint_created(
+                citizen.phone,
+                ticket_ids,
+                response_language,
+            )
 
+        localized_message = localize(
+            "complaint_created",
+            response_language,
+            tickets=", ".join(ticket_ids),
+        )
         return ComplaintSubmitResponse(
             message=f"Successfully registered {len(complaints)} complaint(s)!",
+            localized_message=localized_message,
             tickets=ticket_responses,
             total_complaints_detected=len(complaints),
         )
@@ -147,10 +161,19 @@ async def upload_complaint_image(
     filepath = os.path.join(UPLOAD_DIR, filename)
 
     contents = await file.read()
+    verification = verify_image_evidence(
+        contents,
+        file.content_type,
+        file.filename,
+        complaint.category.value if hasattr(complaint.category, "value") else complaint.category,
+    )
     with open(filepath, "wb") as f:
         f.write(contents)
 
     complaint.image_url = f"/uploads/{filename}"
+    complaint.image_verification_status = verification.status
+    complaint.image_verification_confidence = verification.confidence
+    complaint.image_verification_notes = verification.notes
     await db.commit()
     await db.refresh(complaint)
 

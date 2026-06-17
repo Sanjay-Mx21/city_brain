@@ -26,6 +26,16 @@ class Settings(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str = ""
 
+    # Open-source LLM inference
+    OPEN_SOURCE_LLM_URL: str = "http://localhost:11434/api/generate"
+    OPEN_SOURCE_LLM_MODEL: str = "mistral"
+    TRAINED_LLM_MODEL: str = "citybrain-mistral"
+
+    # Speech-to-text / translation
+    WHISPER_MODEL_SIZE: str = "small"
+    WHISPER_DEVICE: str = "cpu"
+    WHISPER_COMPUTE_TYPE: str = "int8"
+
     # Bhashini
     BHASHINI_API_KEY: str = ""
     BHASHINI_USER_ID: str = ""

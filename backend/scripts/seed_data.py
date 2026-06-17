@@ -16,6 +16,8 @@ from sqlalchemy import func, select
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.database import AsyncSessionLocal, Base, engine
+from app.core.department_catalog import DEPARTMENT_CATALOG
+from app.core.schema_updates import ensure_local_schema_updates
 from app.core.security import hash_password
 from app.models.models import (
     Complaint,
@@ -28,50 +30,7 @@ from app.models.models import (
 )
 
 
-DEPARTMENTS = [
-    {
-        "name": "BBMP",
-        "full_name": "Bruhat Bengaluru Mahanagara Palike",
-        "description": "Municipal corporation - roads, garbage, drainage, parks, buildings",
-        "categories": [
-            "road_damage",
-            "pothole",
-            "garbage",
-            "drainage",
-            "sewage",
-            "tree_fall",
-            "park_maintenance",
-            "illegal_construction",
-            "encroachment",
-            "stray_animals",
-            "noise_pollution",
-        ],
-    },
-    {
-        "name": "BESCOM",
-        "full_name": "Bangalore Electricity Supply Company",
-        "description": "Power supply - streetlights, outages, electrical issues",
-        "categories": ["streetlight", "electricity", "power_outage"],
-    },
-    {
-        "name": "BWSSB",
-        "full_name": "Bangalore Water Supply and Sewerage Board",
-        "description": "Water supply and sewage management",
-        "categories": ["water_supply", "water_leakage"],
-    },
-    {
-        "name": "BTP",
-        "full_name": "Bengaluru Traffic Police",
-        "description": "Traffic management and signal maintenance",
-        "categories": ["traffic_signal"],
-    },
-    {
-        "name": "BMTC",
-        "full_name": "Bangalore Metropolitan Transport Corporation",
-        "description": "Public bus transport services",
-        "categories": ["public_transport"],
-    },
-]
+DEPARTMENTS = DEPARTMENT_CATALOG
 
 
 WARDS = [
@@ -129,11 +88,207 @@ SAMPLE_COMPLAINTS = [
     {"text": "Multiple potholes on Sarjapur Road very dangerous", "category": "pothole", "dept": "BBMP", "priority": 4},
     {"text": "Electricity wire hanging dangerously low in RT Nagar", "category": "electricity", "dept": "BESCOM", "priority": 5},
     {"text": "No water pressure in Banashankari, problem for weeks", "category": "water_supply", "dept": "BWSSB", "priority": 3},
+    {"text": "Metro station escalator not working near Indiranagar", "category": "metro_station", "dept": "BMRCL", "priority": 2},
+    {"text": "BDA layout road work left incomplete in Nagarbhavi", "category": "development_work", "dept": "BDA", "priority": 2},
+    {"text": "Garbage collection vehicle has not come for 4 days in JP Nagar", "category": "waste_collection", "dept": "BSWML", "priority": 3},
+    {"text": "Factory smoke causing air pollution near Peenya", "category": "air_pollution", "dept": "KSPCB", "priority": 4},
+    {"text": "Fire safety violation in commercial building at Majestic", "category": "fire_hazard", "dept": "KSFES", "priority": 5},
+    {"text": "Transformer sparks near Yelahanka substation", "category": "transformer", "dept": "KPTCL", "priority": 5},
+    {"text": "State road bridge side wall damaged near Kengeri", "category": "bridge_damage", "dept": "PWD", "priority": 4},
+    {"text": "Autos parked illegally blocking road near Shivajinagar", "category": "vehicle_violation", "dept": "RTO", "priority": 2},
+    {"text": "Cycle track blocked by debris in HSR Layout", "category": "cycle_track", "dept": "DULT", "priority": 2},
+    {"text": "Public nuisance and safety issue near Frazer Town", "category": "public_safety", "dept": "KSP", "priority": 3},
+    {"text": "Mosquito breeding due to stagnant water in Bellandur", "category": "mosquito_menace", "dept": "BBMP_HEALTH", "priority": 4},
+    {"text": "Unauthorized tree cutting reported in Sadashivanagar", "category": "tree_cutting", "dept": "FOREST", "priority": 4},
+    {"text": "Public garden plants drying due to poor maintenance in Lalbagh area", "category": "public_garden", "dept": "HORTICULTURE", "priority": 2},
+    {"text": "Storm damage and flooding emergency near Bommanahalli", "category": "storm_damage", "dept": "KSDMA", "priority": 5},
 ]
+
+LOCATION_DETAILS = [
+    "near the bus stop",
+    "beside the market",
+    "outside the school",
+    "near the metro station",
+    "at 1st main",
+    "at 4th cross",
+    "near the park entrance",
+    "beside the apartment gate",
+    "near the hospital road",
+    "at the main junction",
+]
+
+CATEGORY_TEMPLATES = {
+    "pothole": [
+        "Large pothole causing slow traffic {location}",
+        "Deep pothole filled with rainwater {location}",
+        "Multiple potholes damaging vehicles {location}",
+    ],
+    "streetlight": [
+        "Streetlight is not working {location}",
+        "Streetlight pole is damaged and dark at night {location}",
+        "Broken streetlight causing safety concerns {location}",
+    ],
+    "water_supply": [
+        "No water supply since morning {location}",
+        "Very low water pressure reported {location}",
+        "Water supply interrupted for multiple houses {location}",
+    ],
+    "garbage": [
+        "Garbage pile has not been cleared {location}",
+        "Overflowing waste bin causing bad smell {location}",
+        "Uncollected garbage blocking the footpath {location}",
+    ],
+    "drainage": [
+        "Drainage blockage causing waterlogging {location}",
+        "Storm water drain is overflowing {location}",
+        "Blocked drain after rain causing flooding {location}",
+    ],
+    "road_damage": [
+        "Road surface is damaged and uneven {location}",
+        "Road has broken patches causing vehicle damage {location}",
+        "Damaged road needs urgent repair {location}",
+    ],
+    "water_leakage": [
+        "Water pipe leakage wasting water {location}",
+        "Water pipe burst flooding the road {location}",
+        "Continuous water leakage from underground pipe {location}",
+    ],
+    "power_outage": [
+        "Power outage affecting houses {location}",
+        "Electricity supply is unstable {location}",
+        "Frequent power cuts reported {location}",
+    ],
+    "electricity": [
+        "Electric wire is hanging dangerously {location}",
+        "Electrical box is open and unsafe {location}",
+        "Sparking electricity line reported {location}",
+    ],
+    "tree_fall": [
+        "Tree branch has fallen and blocked the road {location}",
+        "Large tree is leaning dangerously {location}",
+        "Fallen tree needs immediate clearance {location}",
+    ],
+    "illegal_construction": [
+        "Unauthorized construction activity noticed {location}",
+        "Building material is blocking public space {location}",
+        "Illegal construction work is continuing {location}",
+    ],
+    "traffic_signal": [
+        "Traffic signal is not working {location}",
+        "Signal timing issue causing congestion {location}",
+        "Broken traffic signal creating confusion {location}",
+    ],
+    "stray_animals": [
+        "Stray animal problem reported {location}",
+        "Stray dogs chasing pedestrians {location}",
+        "Animal menace near residential lane {location}",
+    ],
+    "sewage": [
+        "Sewage overflow causing bad smell {location}",
+        "Sewage water flowing on the street {location}",
+        "Manhole overflow needs urgent attention {location}",
+    ],
+    "park_maintenance": [
+        "Park equipment is broken {location}",
+        "Park lights and benches need maintenance {location}",
+        "Children's play area is not maintained {location}",
+    ],
+    "noise_pollution": [
+        "Loud construction noise late at night {location}",
+        "Noise pollution disturbing residents {location}",
+        "Loudspeaker noise reported repeatedly {location}",
+    ],
+    "public_transport": [
+        "Bus stop shelter is damaged {location}",
+        "BMTC bus stop needs repair {location}",
+        "Public transport shelter is unsafe {location}",
+    ],
+    "encroachment": [
+        "Footpath encroachment blocking pedestrians {location}",
+        "Shops have occupied public walkway {location}",
+        "Encroachment causing traffic bottleneck {location}",
+    ],
+    "metro_station": [
+        "Metro station escalator is not working {location}",
+        "Metro station access is blocked {location}",
+        "Namma Metro station facility needs repair {location}",
+    ],
+    "development_work": [
+        "Development work has been left incomplete {location}",
+        "BDA layout work is blocking access {location}",
+        "Open development trench needs barricading {location}",
+    ],
+    "waste_collection": [
+        "Waste collection has been missed repeatedly {location}",
+        "Door-to-door garbage collection has not happened {location}",
+        "Solid waste collection point is overflowing {location}",
+    ],
+    "air_pollution": [
+        "Air pollution from smoke reported {location}",
+        "Industrial smoke causing breathing issues {location}",
+        "Dust and smoke pollution needs inspection {location}",
+    ],
+    "fire_hazard": [
+        "Fire safety hazard reported {location}",
+        "Unsafe electrical setup could cause fire {location}",
+        "Emergency fire-risk inspection needed {location}",
+    ],
+    "transformer": [
+        "Transformer is sparking dangerously {location}",
+        "Transformer oil leak reported {location}",
+        "Substation transformer needs urgent inspection {location}",
+    ],
+    "bridge_damage": [
+        "Bridge side wall is damaged {location}",
+        "Bridge approach road is unsafe {location}",
+        "Public bridge structure needs repair {location}",
+    ],
+    "vehicle_violation": [
+        "Vehicle violation is blocking public access {location}",
+        "Autos and vehicles are parked illegally {location}",
+        "Transport enforcement needed for blocked road {location}",
+    ],
+    "cycle_track": [
+        "Cycle track is blocked by debris {location}",
+        "Cycle lane marking is damaged {location}",
+        "Unsafe cycling path needs repair {location}",
+    ],
+    "public_safety": [
+        "Public safety issue reported {location}",
+        "Residents reported nuisance and safety risk {location}",
+        "Police support needed for public disturbance {location}",
+    ],
+    "mosquito_menace": [
+        "Mosquito breeding reported due to stagnant water {location}",
+        "Public health inspection needed for mosquito menace {location}",
+        "Sanitation issue causing mosquito problem {location}",
+    ],
+    "tree_cutting": [
+        "Unauthorized tree cutting reported {location}",
+        "Urban tree damage needs forest department inspection {location}",
+        "Tree protection complaint raised {location}",
+    ],
+    "public_garden": [
+        "Public garden maintenance is poor {location}",
+        "Garden plants and landscaping need maintenance {location}",
+        "Horticulture issue reported in public garden {location}",
+    ],
+    "storm_damage": [
+        "Storm damage requires emergency response {location}",
+        "Heavy rain damage reported {location}",
+        "Disaster response needed after storm {location}",
+    ],
+    "other": [
+        "General civic issue reported {location}",
+        "Citizen reported a local civic problem {location}",
+        "Public service issue needs review {location}",
+    ],
+}
 
 MIN_SEED_COMPLAINTS = 1500
 MAX_SEED_COMPLAINTS = 5000
 DEFAULT_SEED_COMPLAINTS = 1500
+SLA_HOURS = {1: 720, 2: 168, 3: 72, 4: 24, 5: 4}
 
 
 def get_seed_complaint_target() -> int:
@@ -154,14 +309,18 @@ def random_complaint(ticket_number: int, citizen: User, ward: Ward, dept: Depart
     if status == ComplaintStatus.RESOLVED.value:
         resolved_at = created + timedelta(hours=random.randint(2, 120))
 
+    location = f"{ward.name}, {random.choice(LOCATION_DETAILS)}"
+    templates = CATEGORY_TEMPLATES.get(sample["category"], [sample["text"] + " {location}"])
+    description = random.choice(templates).format(location=f"at {location}")
+
     return Complaint(
         ticket_id=f"CB-2026-{ticket_number:05d}",
         citizen_id=citizen.id,
-        original_text=sample["text"],
+        original_text=description,
         original_language="en",
         category=sample["category"],
-        description=sample["text"],
-        location_text=ward.name,
+        description=description,
+        location_text=location,
         latitude=ward.latitude + random.uniform(-0.005, 0.005),
         longitude=ward.longitude + random.uniform(-0.005, 0.005),
         department_id=dept.id,
@@ -170,7 +329,7 @@ def random_complaint(ticket_number: int, citizen: User, ward: Ward, dept: Depart
         ai_confidence=round(random.uniform(0.75, 0.98), 2),
         status=status,
         created_at=created,
-        sla_deadline=created + timedelta(hours=72),
+        sla_deadline=created + timedelta(hours=SLA_HOURS.get(sample["priority"], 72)),
         resolved_at=resolved_at,
     )
 
@@ -179,19 +338,42 @@ async def seed():
     print("Seeding City Brain database...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await ensure_local_schema_updates(conn)
 
     async with AsyncSessionLocal() as db:
         existing_users = (await db.execute(select(func.count(User.id)))).scalar() or 0
         if existing_users:
             departments = (await db.execute(select(Department))).scalars().all()
+            dept_objects = {dept.name: dept for dept in departments}
+            for dept_data in DEPARTMENTS:
+                dept = dept_objects.get(dept_data["name"])
+                if dept:
+                    dept.full_name = dept_data["full_name"]
+                    dept.description = dept_data["description"]
+                    dept.categories = json.dumps(dept_data["categories"])
+                    dept.is_active = True
+                else:
+                    dept = Department(
+                        name=dept_data["name"],
+                        full_name=dept_data["full_name"],
+                        description=dept_data["description"],
+                        categories=json.dumps(dept_data["categories"]),
+                    )
+                    db.add(dept)
+                    await db.flush()
+                    dept_objects[dept.name] = dept
             wards = (await db.execute(select(Ward))).scalars().all()
             citizen_users = (
                 (await db.execute(select(User).where(User.role == UserRole.CITIZEN.value)))
                 .scalars()
                 .all()
             )
-            dept_objects = {dept.name: dept for dept in departments}
-            print("  Database already has users; checking complaint volume")
+            demo_citizen = (
+                await db.execute(select(User).where(User.phone == "+919888000000"))
+            ).scalar_one_or_none()
+            if demo_citizen:
+                demo_citizen.preferred_language = "en"
+            print(f"  Database already has users; synced {len(DEPARTMENTS)} organizations")
         else:
             dept_objects = {}
             for dept_data in DEPARTMENTS:
@@ -271,7 +453,7 @@ async def seed():
                     phone=f"+91988800{index:04d}",
                     password_hash=hash_password("citizen123"),
                     role=UserRole.CITIZEN.value,
-                    preferred_language=random.choice(["en", "kn", "hi"]),
+                    preferred_language="en" if index == 0 else random.choice(["en", "kn", "hi"]),
                     ward_id=random.choice(wards).id,
                 )
                 db.add(citizen)

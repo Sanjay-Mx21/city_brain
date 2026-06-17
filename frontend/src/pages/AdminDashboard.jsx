@@ -1,12 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { adminAPI } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import { Loader2, TrendingUp, Clock, AlertTriangle, CheckCircle2, Building2 } from 'lucide-react';
 
 const COLORS = ['#2563eb', '#059669', '#ea580c', '#dc2626', '#7c3aed', '#ca8a04'];
+const BENGALURU_CENTER = [12.9716, 77.5946];
+
+function heatColor(intensity) {
+  if (intensity >= 5) return '#dc2626';
+  if (intensity >= 4) return '#ea580c';
+  if (intensity >= 3) return '#eab308';
+  return '#2563eb';
+}
 
 export default function AdminDashboard() {
   const [dashboard, setDashboard] = useState(null);
+  const [heatmap, setHeatmap] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -15,8 +25,12 @@ export default function AdminDashboard() {
 
   const loadDashboard = async () => {
     try {
-      const { data } = await adminAPI.getDashboard();
-      setDashboard(data);
+      const [dashboardRes, heatmapRes] = await Promise.all([
+        adminAPI.getDashboard(),
+        adminAPI.getHeatmap(),
+      ]);
+      setDashboard(dashboardRes.data);
+      setHeatmap(heatmapRes.data);
     } catch (err) {
       console.error('Failed to load dashboard:', err);
     } finally {
@@ -59,12 +73,14 @@ export default function AdminDashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-8">
         <KPICard icon={Building2} label="Total Complaints" value={dashboard.total_complaints} color="slate" />
         <KPICard icon={Clock} label="Pending" value={dashboard.pending} color="yellow" />
         <KPICard icon={TrendingUp} label="In Progress" value={dashboard.in_progress} color="blue" />
         <KPICard icon={CheckCircle2} label="Resolved" value={dashboard.resolved} color="green" />
         <KPICard icon={AlertTriangle} label="Escalated" value={dashboard.escalated} color="red" />
+        <KPICard icon={AlertTriangle} label="Overdue" value={dashboard.overdue} color="red" />
+        <KPICard icon={Clock} label="Due Soon" value={dashboard.due_soon} color="orange" />
         <KPICard icon={Clock} label="Avg Resolution" value={dashboard.avg_resolution_hours ? `${dashboard.avg_resolution_hours}h` : 'N/A'} color="purple" />
       </div>
 
@@ -104,6 +120,41 @@ export default function AdminDashboard() {
               <Bar dataKey="resolved" fill="#22c55e" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl p-6 mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-slate-700">Ward-Level Complaint Heatmap</h3>
+          <p className="text-xs text-slate-400">{heatmap.length} geo-tagged complaints</p>
+        </div>
+        <div className="h-96 overflow-hidden rounded-lg border border-slate-100">
+          <MapContainer center={BENGALURU_CENTER} zoom={11} className="h-full w-full">
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            {heatmap.map((point, index) => (
+              <CircleMarker
+                key={`${point.latitude}-${point.longitude}-${index}`}
+                center={[point.latitude, point.longitude]}
+                radius={Math.max(5, point.intensity * 2.5)}
+                pathOptions={{
+                  color: heatColor(point.intensity),
+                  fillColor: heatColor(point.intensity),
+                  fillOpacity: 0.35,
+                  weight: 1,
+                }}
+              >
+                <Popup>
+                  <div className="text-sm">
+                    <p className="font-semibold capitalize">{point.category?.replace(/_/g, ' ')}</p>
+                    <p>Priority {point.intensity}/5</p>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            ))}
+          </MapContainer>
         </div>
       </div>
 
@@ -168,6 +219,7 @@ function KPICard({ icon: Icon, label, value, color }) {
     blue: 'bg-blue-50 text-blue-700',
     green: 'bg-green-50 text-green-700',
     red: 'bg-red-50 text-red-700',
+    orange: 'bg-orange-50 text-orange-700',
     purple: 'bg-purple-50 text-purple-700',
   };
   return (

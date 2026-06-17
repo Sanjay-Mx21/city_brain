@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { officerAPI } from '../services/api';
+import { adminAPI, officerAPI } from '../services/api';
 import { Loader2, CheckCircle2, Clock, AlertTriangle, MapPin, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatSlaStatus, getSlaClass } from '../utils/sla';
+import { imageVerificationClass, imageVerificationLabel } from '../utils/imageVerification';
 
 function mapsUrl(lat, lon) {
   return `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
@@ -10,17 +12,34 @@ function mapsUrl(lat, lon) {
 export default function OfficerDashboard() {
   const [complaints, setComplaints] = useState([]);
   const [stats, setStats] = useState(null);
+  const [departments, setDepartments] = useState([]);
+  const [departmentFilter, setDepartmentFilter] = useState(0);
   const [statusFilter, setStatusFilter] = useState('');
+  const [sortBy, setSortBy] = useState('priority');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { load(); }, [statusFilter]);
+  useEffect(() => {
+    loadDepartments();
+  }, []);
+
+  useEffect(() => { load(); }, [statusFilter, departmentFilter, sortBy]);
+
+  const loadDepartments = async () => {
+    try {
+      const { data } = await adminAPI.getDepartments();
+      setDepartments(data);
+    } catch {
+      toast.error('Failed to load organizations');
+    }
+  };
 
   const load = async () => {
     setLoading(true);
     try {
+      const selectedDepartment = Number(departmentFilter);
       const [queueRes, statsRes] = await Promise.all([
-        officerAPI.getQueue(statusFilter),
-        officerAPI.getStats(),
+        officerAPI.getQueue(statusFilter, 1, selectedDepartment, sortBy),
+        officerAPI.getStats(selectedDepartment),
       ]);
       setComplaints(queueRes.data.complaints);
       setStats(statsRes.data);
@@ -47,30 +66,68 @@ export default function OfficerDashboard() {
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">
           <StatCard label="Total" value={stats.total_assigned} color="slate" />
           <StatCard label="Pending" value={stats.pending} color="yellow" />
           <StatCard label="In Progress" value={stats.in_progress} color="blue" />
           <StatCard label="Resolved" value={stats.resolved} color="green" />
           <StatCard label="Escalated" value={stats.escalated} color="red" />
+          <StatCard label="Overdue" value={stats.overdue} color="red" />
+          <StatCard label="Due Soon" value={stats.due_soon} color="orange" />
         </div>
       )}
 
-      {/* Filter */}
-      <div className="flex gap-2 mb-6">
-        {['', 'pending', 'in_progress', 'resolved', 'escalated'].map((s) => (
+      {/* Filters */}
+      <div className="mb-6 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium uppercase tracking-wide text-slate-400">
+            Organization
+          </label>
+          <select
+            value={departmentFilter}
+            onChange={(event) => setDepartmentFilter(Number(event.target.value))}
+            className="min-w-64 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          >
+            <option value={0}>All organizations</option>
+            {departments.map((department) => (
+              <option key={department.id} value={department.id}>
+                {department.name} - {department.full_name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
           <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
+            onClick={() => {
+              setStatusFilter('');
+              setSortBy('latest');
+            }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              statusFilter === s
+              sortBy === 'latest'
                 ? 'bg-brand-600 text-white'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100'
             }`}
           >
-            {s === '' ? 'All' : s.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+            Latest Complaints
           </button>
-        ))}
+          {['', 'pending', 'in_progress', 'resolved', 'escalated'].map((s) => (
+            <button
+              key={s}
+              onClick={() => {
+                setStatusFilter(s);
+                setSortBy('priority');
+              }}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                sortBy === 'priority' && statusFilter === s
+                  ? 'bg-brand-600 text-white'
+                  : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {s === '' ? 'All' : s.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Complaints Queue */}
@@ -93,11 +150,16 @@ export default function OfficerDashboard() {
                     <p className="text-xs font-mono text-slate-400">{c.ticket_id}</p>
                     <PriorityBadge priority={c.priority} />
                     <StatusBadge status={c.status} />
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${getSlaClass(c)}`}>
+                      {formatSlaStatus(c)}
+                    </span>
                   </div>
                   <h3 className="font-semibold text-slate-700">{c.description}</h3>
                   <div className="flex items-center gap-3 text-sm text-slate-400 mt-1 flex-wrap">
+                    <span>{c.department_name || 'Unassigned'}</span>
+                    <span className="text-slate-300">|</span>
                     <span>{c.category?.replace(/_/g, ' ')}</span>
-                    <span>•</span>
+                    <span className="text-slate-300">|</span>
                     {c.latitude && c.longitude ? (
                       <a
                         href={mapsUrl(c.latitude, c.longitude)}
@@ -112,11 +174,16 @@ export default function OfficerDashboard() {
                     ) : (
                       <span>{c.location_text || 'No location'}</span>
                     )}
-                    <span>•</span>
+                    <span className="text-slate-300">|</span>
                     <span>Filed {new Date(c.created_at).toLocaleDateString()}</span>
                   </div>
                   {c.image_url && (
-                    <img src={c.image_url} alt="Complaint" className="mt-2 h-24 rounded-lg object-cover border border-slate-100" />
+                    <div className="mt-2">
+                      <img src={c.image_url} alt="Complaint" className="h-24 rounded-lg object-cover border border-slate-100" />
+                      <span className={`inline-flex mt-2 px-2 py-1 rounded text-xs font-medium ${imageVerificationClass(c)}`}>
+                        {imageVerificationLabel(c)}
+                      </span>
+                    </div>
                   )}
                 </div>
 
@@ -148,6 +215,7 @@ function StatCard({ label, value, color }) {
     blue: 'bg-blue-50 text-blue-700',
     green: 'bg-green-50 text-green-700',
     red: 'bg-red-50 text-red-700',
+    orange: 'bg-orange-50 text-orange-700',
   };
   return (
     <div className={`rounded-xl p-4 ${colors[color]}`}>

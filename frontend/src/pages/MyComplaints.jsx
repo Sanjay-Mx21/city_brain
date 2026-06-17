@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { complaintAPI } from '../services/api';
 import { FileText, Clock, CheckCircle2, AlertTriangle, Loader2, MapPin, ExternalLink } from 'lucide-react';
+import { formatSlaStatus, getSlaClass } from '../utils/sla';
+import { imageVerificationClass, imageVerificationLabel } from '../utils/imageVerification';
 
 function mapsUrl(lat, lon) {
   return `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
@@ -82,6 +84,9 @@ export default function MyComplaints() {
                   <span>Dept: <strong className="text-slate-700">{c.department_name}</strong></span>
                   <span>Category: <strong className="text-slate-700 capitalize">{c.category?.replace(/_/g, ' ')}</strong></span>
                   <span>Priority: <strong className="text-slate-700">{c.priority}/5</strong></span>
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${getSlaClass(c)}`}>
+                    {formatSlaStatus(c)}
+                  </span>
                   {c.latitude && c.longitude ? (
                     <a
                       href={mapsUrl(c.latitude, c.longitude)}
@@ -98,7 +103,12 @@ export default function MyComplaints() {
                   ) : null}
                 </div>
                 {c.image_url && (
-                  <img src={c.image_url} alt="Complaint" className="mt-3 h-28 rounded-lg object-cover border border-slate-100" />
+                  <div className="mt-3">
+                    <img src={c.image_url} alt="Complaint" className="h-28 rounded-lg object-cover border border-slate-100" />
+                    <span className={`inline-flex mt-2 px-2 py-1 rounded text-xs font-medium ${imageVerificationClass(c)}`}>
+                      {imageVerificationLabel(c)}
+                    </span>
+                  </div>
                 )}
                 <p className="text-xs text-slate-400 mt-2">
                   Filed: {new Date(c.created_at).toLocaleString()}

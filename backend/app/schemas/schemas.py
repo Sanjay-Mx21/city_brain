@@ -94,7 +94,13 @@ class ComplaintResponse(BaseModel):
     updated_at: datetime
     resolved_at: Optional[datetime] = None
     sla_deadline: Optional[datetime] = None
+    sla_status: Optional[str] = None
+    sla_hours_remaining: Optional[float] = None
+    is_overdue: bool = False
     image_url: Optional[str] = None
+    image_verification_status: Optional[str] = None
+    image_verification_confidence: Optional[float] = None
+    image_verification_notes: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -110,8 +116,22 @@ class ComplaintListResponse(BaseModel):
 class ComplaintSubmitResponse(BaseModel):
     """Returned to citizen after submission."""
     message: str
+    localized_message: Optional[str] = None
     tickets: List[ComplaintResponse]
     total_complaints_detected: int
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=2000)
+    language: Optional[str] = Field(default="en", pattern=r"^(en|kn|hi)$")
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    intent: str
+    suggested_action: Optional[str] = None
+    ticket_id: Optional[str] = None
+    language: str = "en"
 
 
 # ──────────────────────────────────────────────
@@ -129,6 +149,8 @@ class OfficerStats(BaseModel):
     in_progress: int
     resolved: int
     escalated: int
+    overdue: int = 0
+    due_soon: int = 0
     avg_resolution_hours: Optional[float] = None
 
 
@@ -161,6 +183,8 @@ class DashboardOverview(BaseModel):
     in_progress: int
     resolved: int
     escalated: int
+    overdue: int = 0
+    due_soon: int = 0
     avg_resolution_hours: Optional[float] = None
     complaints_today: int
     complaints_this_week: int

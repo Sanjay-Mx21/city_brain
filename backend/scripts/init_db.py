@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.database import Base, engine
+from app.core.schema_updates import ensure_local_schema_updates
 from app.models.models import *  # noqa: F403 - register all models with SQLAlchemy
 
 
@@ -17,6 +18,7 @@ async def init_db():
     print("Initializing City Brain database...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await ensure_local_schema_updates(conn)
     print("All tables created successfully!")
     await engine.dispose()
 

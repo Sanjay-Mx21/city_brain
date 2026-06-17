@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { complaintAPI } from '../services/api';
 import { Brain, Search, Loader2, CheckCircle2, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
+import { formatSlaStatus, getSlaClass } from '../utils/sla';
+import { imageVerificationClass, imageVerificationLabel } from '../utils/imageVerification';
+import { statusLabel } from '../utils/localizedLabels';
 
 function mapsUrl(lat, lon) {
   return `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
@@ -67,17 +70,31 @@ export default function TrackComplaint() {
               <p className="text-xs font-mono text-slate-400">{complaint.ticket_id}</p>
               <h2 className="text-xl font-bold text-slate-800 mt-1">{complaint.description}</h2>
             </div>
-            <StatusBadge status={complaint.status} />
+            <StatusBadge status={complaint.status} language={complaint.original_language} />
           </div>
 
           {complaint.image_url && (
-            <img src={complaint.image_url} alt="Complaint" className="w-full max-h-56 object-cover rounded-xl border border-slate-100" />
+            <div>
+              <img src={complaint.image_url} alt="Complaint" className="w-full max-h-56 object-cover rounded-xl border border-slate-100" />
+              <span className={`inline-flex mt-2 px-2 py-1 rounded text-xs font-medium ${imageVerificationClass(complaint)}`}>
+                {imageVerificationLabel(complaint)}
+              </span>
+              {complaint.image_verification_notes && (
+                <p className="text-xs text-slate-500 mt-1">{complaint.image_verification_notes}</p>
+              )}
+            </div>
           )}
 
           <div className="grid grid-cols-2 gap-4 text-sm">
             <Detail label="Department" value={complaint.department_name} />
             <Detail label="Category" value={complaint.category?.replace(/_/g, ' ')} />
             <Detail label="Priority" value={`${complaint.priority}/5`} />
+            <div>
+              <p className="text-slate-400">SLA</p>
+              <span className={`inline-flex px-2 py-1 rounded text-xs font-medium ${getSlaClass(complaint)}`}>
+                {formatSlaStatus(complaint)}
+              </span>
+            </div>
             <Detail label="Filed On" value={new Date(complaint.created_at).toLocaleString()} />
             <Detail label="Last Updated" value={new Date(complaint.updated_at).toLocaleString()} />
             {complaint.resolved_at && (
@@ -115,7 +132,7 @@ export default function TrackComplaint() {
   );
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, language = 'en' }) {
   const config = {
     pending: { bg: 'bg-yellow-100 text-yellow-700', label: 'Pending' },
     assigned: { bg: 'bg-blue-100 text-blue-700', label: 'Assigned' },
@@ -124,7 +141,7 @@ function StatusBadge({ status }) {
     escalated: { bg: 'bg-red-100 text-red-700', label: 'Escalated' },
   };
   const c = config[status] || config.pending;
-  return <span className={`px-3 py-1 rounded-full text-xs font-medium ${c.bg}`}>{c.label}</span>;
+  return <span className={`px-3 py-1 rounded-full text-xs font-medium ${c.bg}`}>{statusLabel(status, language) || c.label}</span>;
 }
 
 function Detail({ label, value }) {

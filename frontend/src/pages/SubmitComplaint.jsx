@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { complaintAPI } from '../services/api';
-import { Send, MapPin, Globe, Loader2, CheckCircle2, Image, ExternalLink, Mic, MicOff } from 'lucide-react';
+import { Send, MapPin, Globe, Loader2, CheckCircle2, Image, ExternalLink, Mic, MicOff, AlertTriangle, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { imageVerificationClass, imageVerificationLabel } from '../utils/imageVerification';
 
 const PRIORITY_COLORS = {
   1: 'bg-green-100 text-green-700',
@@ -27,6 +28,7 @@ export default function SubmitComplaint() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [voiceSource, setVoiceSource] = useState('');
+  const [voiceDraft, setVoiceDraft] = useState(null);
 
   const fileRef = useRef();
   const mediaRecorderRef = useRef(null);
@@ -41,6 +43,21 @@ export default function SubmitComplaint() {
     };
   }, []);
 
+  const appendVoiceText = (value, source) => {
+    const cleanText = value.trim();
+    if (!cleanText) return;
+    setText((prev) => (prev ? `${prev.trim()} ${cleanText}` : cleanText));
+    setLanguage('en');
+    setVoiceSource(source || 'auto');
+  };
+
+  const useVoiceDraft = () => {
+    if (!voiceDraft?.text) return;
+    appendVoiceText(voiceDraft.text, voiceDraft.source);
+    setVoiceDraft(null);
+    toast.success('Voice text added. Please check it once before submitting.');
+  };
+
   const toggleMic = async () => {
     if (isRecording) {
       // Stop → triggers onstop which sends to Whisper
@@ -52,6 +69,7 @@ export default function SubmitComplaint() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       audioChunksRef.current = [];
+      setVoiceDraft(null);
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
@@ -68,10 +86,22 @@ export default function SubmitComplaint() {
           const { data } = await complaintAPI.transcribe(blob, language, true);
           const englishText = data.english_text || data.text;
           if (englishText) {
-            setText((prev) => (prev ? `${prev} ${englishText}` : englishText));
-            setLanguage('en');
-            setVoiceSource(data.detected_language || language || 'auto');
-            toast.success(data.translated ? 'Voice translated to English!' : 'Voice transcribed!');
+            const source = data.detected_language || language || 'auto';
+            if (data.review_required) {
+              setVoiceDraft({
+                text: englishText,
+                source,
+                warnings: data.warnings || [],
+                confidence: data.confidence,
+                model: data.model,
+              });
+              setVoiceSource('');
+              toast.error('Voice translation looks unreliable. Review it before using.');
+            } else {
+              appendVoiceText(englishText, source);
+              setVoiceDraft(null);
+              toast.success(data.translated ? 'Voice translated to English!' : 'Voice transcribed!');
+            }
           } else {
             toast.error('No speech detected — try again.');
           }
@@ -232,6 +262,42 @@ export default function SubmitComplaint() {
                 Last voice input translated to English from {voiceSource}.
               </p>
             )}
+            {voiceDraft && !isRecording && !isTranscribing && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-amber-800">
+                      Translation needs review
+                    </p>
+                    <p className="mt-1 text-sm text-amber-900">{voiceDraft.text}</p>
+                    {voiceDraft.warnings?.length > 0 && (
+                      <p className="mt-1 text-xs text-amber-700">
+                        {voiceDraft.warnings[0]}
+                      </p>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={useVoiceDraft}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        Use text
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVoiceDraft(null)}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        Discard
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {!isRecording && !isTranscribing && (
               <p className="text-xs text-slate-400 mt-1">
                 Tip: You can mention multiple issues in one message. We'll create separate tickets for each.
@@ -299,6 +365,9 @@ export default function SubmitComplaint() {
               <CheckCircle2 className="w-6 h-6 text-green-600" />
               <h2 className="text-lg font-semibold text-green-800">{result.message}</h2>
             </div>
+            {result.localized_message && (
+              <p className="text-sm text-green-700 mb-2">{result.localized_message}</p>
+            )}
             <p className="text-sm text-green-600">
               We detected {result.total_complaints_detected} complaint(s) in your message.
             </p>
@@ -317,7 +386,12 @@ export default function SubmitComplaint() {
               </div>
 
               {ticket.image_url && (
-                <img src={ticket.image_url} alt="Complaint" className="w-full max-h-48 object-cover rounded-lg mb-4 border border-slate-100" />
+                <div className="mb-4">
+                  <img src={ticket.image_url} alt="Complaint" className="w-full max-h-48 object-cover rounded-lg border border-slate-100" />
+                  <span className={`inline-flex mt-2 px-2 py-1 rounded text-xs font-medium ${imageVerificationClass(ticket)}`}>
+                    {imageVerificationLabel(ticket)}
+                  </span>
+                </div>
               )}
 
               <div className="grid grid-cols-2 gap-4 text-sm">
@@ -364,7 +438,7 @@ export default function SubmitComplaint() {
 
           <div className="flex gap-3">
             <button
-              onClick={() => { setResult(null); setText(''); setImage(null); setImagePreview(null); }}
+              onClick={() => { setResult(null); setText(''); setImage(null); setImagePreview(null); setVoiceDraft(null); setVoiceSource(''); }}
               className="flex-1 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition"
             >
               Report Another Issue

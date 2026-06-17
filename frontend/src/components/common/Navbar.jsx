@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../utils/AuthContext';
-import { Brain, LogOut, FileText, PlusCircle, LayoutDashboard, Shield } from 'lucide-react';
+import { Bot, Brain, LogOut, FileText, PlusCircle, LayoutDashboard, Shield } from 'lucide-react';
 
 export default function Navbar() {
   const { user, logout, isAdmin, isOfficer, isCitizen } = useAuth();
@@ -35,6 +35,11 @@ export default function Navbar() {
                   className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition">
                   <FileText className="w-4 h-4" />
                   My Complaints
+                </Link>
+                <Link to="/assistant"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition">
+                  <Bot className="w-4 h-4" />
+                  Assistant
                 </Link>
               </>
             )}
