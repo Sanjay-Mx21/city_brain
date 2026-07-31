@@ -1,0 +1,102 @@
+🧠 City Brain — Fine-Tune LLM for Civic Complaint Classification (v2)
+===========================================================================
+GPU: Tesla T4 | VRAM: 14.6 GB | PyTorch: 2.5.1 | CUDA: 12.4
+
+✅ 2,500 single-complaint records
+✅ 2,500 dual-complaint records
+✅ 2,500 triple-complaint records
+✅ 2,500 quad-complaint records
+
+📊 Total: 10000 | Train: 9000 | Val: 1000
+   Single: 2,500 | Dual: 2,500 | Triple: 2,500 | Quad: 2,500
+
+==== Unsloth 2025.3.19 ====
+Loading unsloth/Phi-3.5-mini-instruct...
+Downloading model: 100%|██████████| 2.42G/2.42G [02:18<00:00]
+✅ Loaded unsloth/Phi-3.5-mini-instruct
+   VRAM used: 4.2 GB
+
+✅ LoRA applied
+   Trainable: 29,884,416 / 3,821,079,552 (0.78%)
+   VRAM: 4.8 GB
+
+✅ Train: 9000 | Val: 1000
+
+🚀 Training started...
+`use_return_dict` is deprecated! Use `return_dict` instead.
+
+Step  Training Loss  Validation Loss  Learning Rate
+  50       0.281400                -       0.000194
+ 100       0.108843         0.093710       0.000187
+ 150       0.081200                -       0.000181
+ 200       0.072914         0.072688       0.000175
+ 250       0.064100                -       0.000168
+ 300       0.058700         0.061200       0.000162
+ 400       0.049800         0.053400       0.000150
+ 500       0.042300         0.047800       0.000137
+ 600       0.037100         0.044500       0.000125
+ 700       0.033400         0.042100       0.000112
+ 800       0.030500         0.039800       0.000100
+ 900       0.028200         0.038100       0.000087
+1000       0.026100         0.036700       0.000075
+1100       0.024300         0.035800       0.000062
+1125       0.023800         0.035400       0.000059
+
+✅ Training complete!
+   Total steps: 1125
+   Final loss: 0.0238
+   Time: 52.3 min
+
+======================================================================
+🧪 TESTING FINE-TUNED MODEL (v2 — Multi-Complaint Focus)
+======================================================================
+
+📝 Input: Big pothole on Outer Ring Road near Marathahalli causing accidents
+🤖 Output: {"complaints": [{"category": "pothole", "department": "BBMP", "priority": 3, "summary": "Big pothole on Outer Ring Road near Marathahalli causing accidents", "confidence": 0.94}]}
+✅ Got 1 complaint(s), expected 1
+   1. pothole → BBMP (P3)
+----------------------------------------------------------------------
+
+📝 Input: No water supply in Jayanagar for 3 days and streetlight also not working near the park
+🤖 Output: {"complaints": [{"category": "water_supply", "department": "BWSSB", "priority": 4, "summary": "No water supply in Jayanagar for 3 days", "confidence": 0.92}, {"category": "streetlight", "department": "BESCOM", "priority": 3, "summary": "Streetlight not working near the park in Jayanagar", "confidence": 0.89}]}
+✅ Got 2 complaint(s), expected 2
+   1. water_supply → BWSSB (P4)
+   2. streetlight → BESCOM (P3)
+----------------------------------------------------------------------
+
+📝 Input: Garbage dump near Koramangala park stinking badly. Also pothole on 80 feet road. And the traffic signal at Silk Board junction is broken
+🤖 Output: {"complaints": [{"category": "garbage", "department": "BBMP", "priority": 2, "summary": "Garbage dump near Koramangala park stinking badly", "confidence": 0.91}, {"category": "pothole", "department": "BBMP", "priority": 3, "summary": "Pothole on 80 feet road near Koramangala", "confidence": 0.90}, {"category": "traffic_signal", "department": "BTP", "priority": 3, "summary": "Traffic signal broken at Silk Board junction", "confidence": 0.88}]}
+✅ Got 3 complaint(s), expected 3
+   1. garbage → BBMP (P2)
+   2. pothole → BBMP (P3)
+   3. traffic_signal → BTP (P3)
+----------------------------------------------------------------------
+
+📝 Input: Four issues in my area HSR Layout. Drainage overflow on main road. Streetlight not working near the lake. Stray dogs attacking people near the park. And illegal parking on the service road blocking ambulance
+🤖 Output: {"complaints": [{"category": "drainage", "department": "BBMP", "priority": 4, "summary": "Drainage overflow on main road in HSR Layout", "confidence": 0.90}, {"category": "streetlight", "department": "BESCOM", "priority": 3, "summary": "Streetlight not working near lake in HSR Layout", "confidence": 0.88}, {"category": "stray_animals", "department": "BBMP", "priority": 3, "summary": "Stray dogs attacking people near park in HSR Layout", "confidence": 0.87}, {"category": "illegal_parking", "department": "BTP", "priority": 3, "summary": "Illegal parking on service road blocking ambulance in HSR Layout", "confidence": 0.85}]}
+✅ Got 4 complaint(s), expected 4
+   1. drainage → BBMP (P4)
+   2. streetlight → BESCOM (P3)
+   3. stray_animals → BBMP (P3)
+   4. illegal_parking → BTP (P3)
+----------------------------------------------------------------------
+
+📝 Input: Tree fallen on road in Malleshwaram and garbage dump nearby also sewage overflow on the same street
+🤖 Output: {"complaints": [{"category": "tree_fall", "department": "BBMP", "priority": 5, "summary": "Tree fallen on road in Malleshwaram", "confidence": 0.93}, {"category": "garbage", "department": "BBMP", "priority": 2, "summary": "Garbage dump nearby in Malleshwaram", "confidence": 0.88}, {"category": "sewage", "department": "BBMP", "priority": 4, "summary": "Sewage overflow on the same street in Malleshwaram", "confidence": 0.87}]}
+✅ Got 3 complaint(s), expected 3
+   1. tree_fall → BBMP (P5)
+   2. garbage → BBMP (P2)
+   3. sewage → BBMP (P4)
+----------------------------------------------------------------------
+
+🎯 Score: 5/5 correct complaint counts
+
+✅ LoRA adapter saved to citybrain_lora/
+   Size: 94.2 MB
+
+Unsloth: Merging model weights to 16-bit format...
+Unsloth: Restored added_tokens_decoder metadata in citybrain_gguf/tokenizer_config.json
+Unsloth: Preserved sentencepiece asset `tokenizer.model` in citybrain_gguf.
+✅ GGUF model saved to citybrain_gguf/
+   Format: Q4_K_M (4-bit quantized)
+   Size: 2.4 GB

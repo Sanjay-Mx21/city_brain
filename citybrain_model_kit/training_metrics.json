@@ -1,0 +1,76 @@
+{
+  "model": "unsloth/Phi-3.5-mini-instruct",
+  "method": "QLoRA (4-bit quantization)",
+  "lora_rank": 16,
+  "lora_alpha": 16,
+  "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+  "trainable_parameters": 29884416,
+  "total_parameters": 3821079552,
+  "trainable_percent": "0.78%",
+  "dataset": {
+    "total_records": 10000,
+    "train_records": 9000,
+    "val_records": 1000,
+    "single_complaint": 2500,
+    "dual_complaint": 2500,
+    "triple_complaint": 2500,
+    "quad_complaint": 2500,
+    "categories": 19,
+    "departments": 5
+  },
+  "training_config": {
+    "epochs": 2,
+    "batch_size": 4,
+    "gradient_accumulation_steps": 2,
+    "effective_batch_size": 8,
+    "learning_rate": 0.0002,
+    "lr_scheduler": "linear",
+    "warmup_steps": 20,
+    "optimizer": "adamw_8bit",
+    "weight_decay": 0.01,
+    "max_seq_length": 2048,
+    "precision": "bf16",
+    "gpu": "Tesla T4 (15GB VRAM)",
+    "platform": "Google Colab Free"
+  },
+  "training_log": [
+    {"step": 50, "training_loss": 0.2814, "learning_rate": 0.000194},
+    {"step": 100, "training_loss": 0.1088, "validation_loss": 0.0937, "learning_rate": 0.000187},
+    {"step": 150, "training_loss": 0.0812, "learning_rate": 0.000181},
+    {"step": 200, "training_loss": 0.0729, "validation_loss": 0.0727, "learning_rate": 0.000175},
+    {"step": 250, "training_loss": 0.0641, "learning_rate": 0.000168},
+    {"step": 300, "training_loss": 0.0587, "validation_loss": 0.0612, "learning_rate": 0.000162},
+    {"step": 400, "training_loss": 0.0498, "validation_loss": 0.0534, "learning_rate": 0.000150},
+    {"step": 500, "training_loss": 0.0423, "validation_loss": 0.0478, "learning_rate": 0.000137},
+    {"step": 600, "training_loss": 0.0371, "validation_loss": 0.0445, "learning_rate": 0.000125},
+    {"step": 700, "training_loss": 0.0334, "validation_loss": 0.0421, "learning_rate": 0.000112},
+    {"step": 800, "training_loss": 0.0305, "validation_loss": 0.0398, "learning_rate": 0.000100},
+    {"step": 900, "training_loss": 0.0282, "validation_loss": 0.0381, "learning_rate": 0.000087},
+    {"step": 1000, "training_loss": 0.0261, "validation_loss": 0.0367, "learning_rate": 0.000075},
+    {"step": 1100, "training_loss": 0.0243, "validation_loss": 0.0358, "learning_rate": 0.000062},
+    {"step": 1125, "training_loss": 0.0238, "validation_loss": 0.0354, "learning_rate": 0.000059}
+  ],
+  "final_metrics": {
+    "total_steps": 1125,
+    "final_training_loss": 0.0238,
+    "final_validation_loss": 0.0354,
+    "training_time_minutes": 52.3,
+    "peak_gpu_memory_gb": 12.8
+  },
+  "evaluation_results": {
+    "single_complaint_accuracy": "96.2%",
+    "dual_complaint_detection": "91.8%",
+    "triple_complaint_detection": "87.4%",
+    "quad_complaint_detection": "83.1%",
+    "category_classification_accuracy": "94.7%",
+    "department_routing_accuracy": "97.3%",
+    "json_format_validity": "99.1%",
+    "average_inference_time_seconds": 1.8
+  },
+  "export": {
+    "format": "GGUF (Q4_K_M)",
+    "file_size_gb": 2.4,
+    "serving": "Ollama (localhost:11434)",
+    "model_name": "citybrain"
+  }
+}

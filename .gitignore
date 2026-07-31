@@ -1,0 +1,71 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Frontend build output
+dist/
+build/
+frontend/dist/
+frontend/build/
+.vite/
+frontend/.vite/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+backend/.venv/
+
+# Python cache and test artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environment and local config
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs
+*.log
+logs/
+backend/logs/
+frontend/logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local runtime data
+*.db
+*.sqlite
+*.sqlite3
+backend/uploads/
+
+# Model and training artifacts
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.onnx
+*.gguf
+*.pkl
+*.joblib
+outputs/
+runs/
+checkpoints/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
