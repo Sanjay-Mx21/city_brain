@@ -6,8 +6,9 @@ FastAPI entry point with all routes, middleware, and startup events.
 import logging
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
@@ -22,13 +23,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+settings.validate_for_production()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     # Startup: Create tables if they don't exist
     logger.info("🧠 City Brain starting up...")
-    os.makedirs("uploads", exist_ok=True)
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await ensure_local_schema_updates(conn)
@@ -47,18 +50,15 @@ app = FastAPI(
     description="AI-Powered Unified Civic Intelligence System for Bengaluru",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if settings.ENABLE_API_DOCS else None,
+    redoc_url="/redoc" if settings.ENABLE_API_DOCS else None,
+    openapi_url="/openapi.json" if settings.ENABLE_API_DOCS else None,
 )
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        settings.FRONTEND_URL,
-        "http://localhost:5173",
-        "http://localhost:3000",
-    ],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,10 +74,28 @@ app.include_router(complaints.router, prefix="/api/v1")
 app.include_router(officer.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
 app.include_router(assistant.router, prefix="/api/v1")
-app.include_router(whatsapp.router, prefix="/api/v1")
+if settings.WHATSAPP_ENABLED:
+    app.include_router(whatsapp.router, prefix="/api/v1")
 
-os.makedirs("uploads", exist_ok=True)
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+
+@app.middleware("http")
+async def upload_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/uploads/"):
+        # Never let the browser sniff an uploaded file into HTML/script.
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self'; sandbox"
+    return response
+
+
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 
 # ──────────────────────────────────────────────

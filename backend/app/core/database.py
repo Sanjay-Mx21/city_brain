@@ -8,22 +8,33 @@ from sqlalchemy.orm import DeclarativeBase
 from app.core.config import settings
 
 
+def normalize_async_url(url: str) -> str:
+    """Hosting providers often hand out postgres:// URLs; SQLAlchemy async needs asyncpg."""
+    if url.startswith("postgres://"):
+        return "postgresql+asyncpg://" + url[len("postgres://"):]
+    if url.startswith("postgresql://"):
+        return "postgresql+asyncpg://" + url[len("postgresql://"):]
+    return url
+
+
+DATABASE_URL = normalize_async_url(settings.DATABASE_URL)
+
 # Async engine for FastAPI
 engine_kwargs = {
     "echo": settings.DEBUG,
     "pool_pre_ping": True,
 }
 
-if settings.DATABASE_URL.startswith("sqlite"):
+if DATABASE_URL.startswith("sqlite"):
     engine_kwargs["connect_args"] = {"check_same_thread": False}
 else:
     engine_kwargs.update(
-        pool_size=20,
+        pool_size=10,
         max_overflow=10,
         connect_args={"statement_cache_size": 0},
     )
 
-engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
+engine = create_async_engine(DATABASE_URL, **engine_kwargs)
 
 # Session factory
 AsyncSessionLocal = async_sessionmaker(

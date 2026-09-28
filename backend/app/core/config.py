@@ -52,8 +52,19 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
-    # Frontend
+    # Frontend / CORS
     FRONTEND_URL: str = "http://localhost:5173"
+    # Comma-separated extra origins allowed by CORS (in addition to FRONTEND_URL)
+    CORS_ORIGINS: str = ""
+
+    # Features
+    WHATSAPP_ENABLED: bool = False
+    ENABLE_API_DOCS: bool = True
+
+    # Uploads
+    UPLOAD_DIR: str = "uploads"
+    MAX_IMAGE_UPLOAD_MB: int = 10
+    MAX_AUDIO_UPLOAD_MB: int = 25
 
     # Logging
     LOG_LEVEL: str = "INFO"
@@ -70,6 +81,31 @@ class Settings(BaseSettings):
             if normalized in {"0", "false", "no", "off", "release", "prod", "production"}:
                 return False
         return bool(value)
+
+    @property
+    def is_production(self) -> bool:
+        return self.APP_ENV.strip().lower() in {"production", "prod"}
+
+    @property
+    def cors_origins(self) -> list[str]:
+        origins = [self.FRONTEND_URL, *self.CORS_ORIGINS.split(",")]
+        if not self.is_production:
+            origins += ["http://localhost:5173", "http://localhost:3000"]
+        return sorted({o.strip().rstrip("/") for o in origins if o.strip()})
+
+    def validate_for_production(self) -> None:
+        """Refuse to start in production with insecure defaults."""
+        if not self.is_production:
+            return
+        problems = []
+        for name in ("JWT_SECRET", "SECRET_KEY"):
+            value = getattr(self, name)
+            if value == "change-me-in-production" or len(value) < 32:
+                problems.append(f"{name} must be set to a random value of at least 32 characters")
+        if self.DEBUG:
+            problems.append("DEBUG must be false")
+        if problems:
+            raise RuntimeError("Insecure production configuration: " + "; ".join(problems))
 
     class Config:
         env_file = ".env"

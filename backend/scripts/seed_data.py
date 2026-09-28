@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.core.config import settings
 from app.core.database import AsyncSessionLocal, Base, engine
 from app.core.department_catalog import DEPARTMENT_CATALOG
 from app.core.schema_updates import ensure_local_schema_updates
@@ -28,6 +29,16 @@ from app.models.models import (
     UserRole,
     Ward,
 )
+
+# Account passwords come from the environment. In production they are required,
+# and demo citizens / synthetic complaints are skipped unless SEED_DEMO_DATA=true.
+ADMIN_PASSWORD = os.getenv("SEED_ADMIN_PASSWORD") or ("" if settings.is_production else "admin123")
+OFFICER_PASSWORD = os.getenv("SEED_OFFICER_PASSWORD") or ("" if settings.is_production else "officer123")
+CITIZEN_PASSWORD = os.getenv("SEED_CITIZEN_PASSWORD") or "citizen123"
+SEED_DEMO_DATA = os.getenv("SEED_DEMO_DATA", "false" if settings.is_production else "true").lower() in {"1", "true", "yes"}
+
+if settings.is_production and (len(ADMIN_PASSWORD) < 8 or len(OFFICER_PASSWORD) < 8):
+    sys.exit("In production set SEED_ADMIN_PASSWORD and SEED_OFFICER_PASSWORD (8+ chars) before seeding.")
 
 
 DEPARTMENTS = DEPARTMENT_CATALOG
@@ -406,7 +417,7 @@ async def seed():
                 full_name="City Admin",
                 phone="+919999900000",
                 email="admin@citybrain.in",
-                password_hash=hash_password("admin123"),
+                password_hash=hash_password(ADMIN_PASSWORD),
                 role=UserRole.ADMIN.value,
             )
             db.add(admin_user)
@@ -418,7 +429,7 @@ async def seed():
                     full_name=f"Officer - {dept_name}",
                     phone=f"+91999990000{index}",
                     email=f"officer.{dept_name.lower()}@citybrain.in",
-                    password_hash=hash_password("officer123"),
+                    password_hash=hash_password(OFFICER_PASSWORD),
                     role=UserRole.OFFICER.value,
                 )
                 db.add(officer_user)
@@ -447,11 +458,11 @@ async def seed():
                 "Ananya Prasad",
             ]
             wards = list(ward_objects.values())
-            for index, name in enumerate(citizen_names):
+            for index, name in enumerate(citizen_names if SEED_DEMO_DATA else []):
                 citizen = User(
                     full_name=name,
                     phone=f"+91988800{index:04d}",
-                    password_hash=hash_password("citizen123"),
+                    password_hash=hash_password(CITIZEN_PASSWORD),
                     role=UserRole.CITIZEN.value,
                     preferred_language="en" if index == 0 else random.choice(["en", "kn", "hi"]),
                     ward_id=random.choice(wards).id,
@@ -469,10 +480,10 @@ async def seed():
             ComplaintStatus.ESCALATED.value,
         ]
 
-        target_complaints = get_seed_complaint_target()
+        target_complaints = get_seed_complaint_target() if SEED_DEMO_DATA and citizen_users else 0
         existing_complaints = (await db.execute(select(func.count(Complaint.id)))).scalar() or 0
         max_complaint_id = (await db.execute(select(func.max(Complaint.id)))).scalar() or 0
-        complaints_to_create = max(0, target_complaints - existing_complaints)
+        complaints_to_create = max(0, target_complaints - existing_complaints) if target_complaints else 0
 
         if existing_complaints > MAX_SEED_COMPLAINTS:
             print(f"  Complaint count is {existing_complaints}, already above the max target of {MAX_SEED_COMPLAINTS}")
@@ -493,10 +504,13 @@ async def seed():
 
         await db.commit()
 
-    print("\nSeed complete! Test accounts:")
-    print("  Admin:   +919999900000 / admin123")
-    print("  Officer: +919999900001 / officer123")
-    print("  Citizen: +919888000000 / citizen123")
+    print("\nSeed complete! Accounts:")
+    print("  Admin:   +919999900000")
+    print("  Officers: +91999990000N (one per department)")
+    if SEED_DEMO_DATA:
+        print("  Citizen: +919888000000")
+    if not settings.is_production:
+        print("  Dev passwords: admin123 / officer123 / citizen123 (unless overridden)")
 
 
 if __name__ == "__main__":

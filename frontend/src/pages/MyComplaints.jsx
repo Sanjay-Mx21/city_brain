@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { complaintAPI } from '../services/api';
+import { complaintAPI, mediaUrl } from '../services/api';
 import { FileText, Clock, CheckCircle2, AlertTriangle, Loader2, MapPin, ExternalLink } from 'lucide-react';
 import { formatSlaStatus, getSlaClass } from '../utils/sla';
 import { imageVerificationClass, imageVerificationLabel } from '../utils/imageVerification';
@@ -104,7 +104,7 @@ export default function MyComplaints() {
                 </div>
                 {c.image_url && (
                   <div className="mt-3">
-                    <img src={c.image_url} alt="Complaint" className="h-28 rounded-lg object-cover border border-slate-100" />
+                    <img src={mediaUrl(c.image_url)} alt="Complaint" className="h-28 rounded-lg object-cover border border-slate-100" />
                     <span className={`inline-flex mt-2 px-2 py-1 rounded text-xs font-medium ${imageVerificationClass(c)}`}>
                       {imageVerificationLabel(c)}
                     </span>

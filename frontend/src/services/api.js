@@ -5,7 +5,14 @@
 
 import axios from 'axios';
 
-const API_BASE = '/api/v1';
+// Same-origin '/api/v1' by default (nginx or the Vite dev proxy forwards it).
+// Set VITE_API_BASE_URL (e.g. https://api.example.com/api/v1) when the
+// backend is hosted on a different domain.
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '');
+const API_ORIGIN = API_BASE.startsWith('http') ? new URL(API_BASE).origin : '';
+
+// Resolve backend-relative media paths such as '/uploads/abc.png'.
+export const mediaUrl = (path) => (path && path.startsWith('/') ? `${API_ORIGIN}${path}` : path);
 
 const api = axios.create({
   baseURL: API_BASE,

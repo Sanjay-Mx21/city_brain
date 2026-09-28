@@ -28,6 +28,10 @@ ACTIVE_STATUSES = {
 }
 
 
+def make_ticket_id(complaint_id: int) -> str:
+    return f"CB-{datetime.utcnow().year}-{complaint_id:05d}"
+
+
 def get_sla_state(c: Complaint) -> tuple[Optional[str], Optional[float], bool]:
     if not c.sla_deadline:
         return None, None, False
@@ -145,7 +149,7 @@ async def process_citizen_complaint(
         await db.flush()
 
         # Use DB-assigned ID for a collision-free ticket ID
-        complaint.ticket_id = f"CB-2026-{complaint.id:05d}"
+        complaint.ticket_id = make_ticket_id(complaint.id)
 
         history = ComplaintStatusHistory(
             complaint_id=complaint.id,
@@ -232,7 +236,7 @@ async def split_legacy_mixed_complaint(
         )
         db.add(new_complaint)
         await db.flush()
-        new_complaint.ticket_id = f"CB-2026-{new_complaint.id:05d}"
+        new_complaint.ticket_id = make_ticket_id(new_complaint.id)
         db.add(ComplaintStatusHistory(
             complaint_id=new_complaint.id,
             old_status=None,

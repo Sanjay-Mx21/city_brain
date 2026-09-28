@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { adminAPI, officerAPI } from '../services/api';
+import { adminAPI, officerAPI, mediaUrl } from '../services/api';
 import { Loader2, CheckCircle2, Clock, AlertTriangle, MapPin, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatSlaStatus, getSlaClass } from '../utils/sla';
@@ -179,7 +179,7 @@ export default function OfficerDashboard() {
                   </div>
                   {c.image_url && (
                     <div className="mt-2">
-                      <img src={c.image_url} alt="Complaint" className="h-24 rounded-lg object-cover border border-slate-100" />
+                      <img src={mediaUrl(c.image_url)} alt="Complaint" className="h-24 rounded-lg object-cover border border-slate-100" />
                       <span className={`inline-flex mt-2 px-2 py-1 rounded text-xs font-medium ${imageVerificationClass(c)}`}>
                         {imageVerificationLabel(c)}
                       </span>

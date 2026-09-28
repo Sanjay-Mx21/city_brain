@@ -16,7 +16,7 @@ class UserRegister(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=200)
     phone: str = Field(..., pattern=r"^\+?[0-9]{10,15}$")
     email: Optional[str] = None
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=8, max_length=72)
     preferred_language: str = Field(default="en", pattern=r"^(en|kn|hi)$")
 
 

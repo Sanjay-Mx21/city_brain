@@ -81,6 +81,21 @@ async def update_status(
             detail=f"Invalid status. Must be one of: {valid_statuses}"
         )
 
+    if current_user["role"] != "admin":
+        officer = (await db.execute(
+            select(Officer).where(Officer.user_id == current_user["user_id"])
+        )).scalar_one_or_none()
+        target = (await db.execute(
+            select(Complaint.department_id).where(Complaint.id == complaint_id)
+        )).first()
+        if target is None:
+            raise HTTPException(status_code=404, detail=f"Complaint {complaint_id} not found")
+        if not officer or not officer.is_active or officer.department_id != target[0]:
+            raise HTTPException(
+                status_code=403,
+                detail="You can only update complaints assigned to your department",
+            )
+
     try:
         complaint = await update_complaint_status(
             db, complaint_id, update, current_user["user_id"]

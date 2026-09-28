@@ -27,6 +27,9 @@ def get_twilio_client():
 
 
 async def send_whatsapp(to_phone: str, message: str) -> bool:
+    if not settings.WHATSAPP_ENABLED:
+        logger.debug("WhatsApp disabled; skipping message to %s", to_phone)
+        return False
     client = get_twilio_client()
     if not client:
         logger.info("[MOCK WhatsApp -> %s]: %s", to_phone, message)

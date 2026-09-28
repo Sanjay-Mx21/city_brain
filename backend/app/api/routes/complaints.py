@@ -3,17 +3,20 @@ City Brain — Complaint Routes
 Submit complaints, view status, get history
 """
 
+import asyncio
 import os
 import uuid
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from typing import Optional
 
-logger = logging.getLogger(__name__)
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_optional_user
 from app.models.models import Complaint, User
 from app.schemas.schemas import (
     ComplaintSubmit, ComplaintSubmitResponse, ComplaintResponse,
@@ -27,8 +30,36 @@ from app.services.localization_service import localize
 from app.services.notification_service import notify_complaint_created
 from app.services.transcription_service import transcribe_audio
 
-ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
-UPLOAD_DIR = "uploads"
+logger = logging.getLogger(__name__)
+
+# The stored file extension is derived from the detected file signature,
+# never from the client-supplied filename or content type.
+IMAGE_SIGNATURES = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+}
+
+
+def detect_image_type(data: bytes) -> Optional[str]:
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    return None
+
+
+async def read_limited(file: UploadFile, max_mb: int) -> bytes:
+    max_bytes = max_mb * 1024 * 1024
+    data = await file.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise HTTPException(status_code=413, detail=f"File too large (max {max_mb} MB)")
+    return data
 
 router = APIRouter(prefix="/complaints", tags=["Complaints"])
 
@@ -86,8 +117,11 @@ async def submit_complaint(
             total_complaints_detected=len(complaints),
         )
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to process complaint: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to process complaint")
+        raise HTTPException(status_code=500, detail="Failed to process complaint. Please try again.")
 
 
 @router.get("/my", response_model=ComplaintListResponse)
@@ -113,14 +147,17 @@ async def get_my_complaints(
 @router.get("/track/{ticket_id}", response_model=ComplaintResponse)
 async def track_complaint(
     ticket_id: str,
+    current_user: Optional[dict] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Track a complaint by ticket ID (public — no auth required)."""
-    from sqlalchemy.orm import selectinload
-
+    """
+    Track a complaint by ticket ID (public — no auth required).
+    Anonymous callers get status only; the citizen's own text, exact GPS
+    location and photo are shown only to the owner and to officers/admins.
+    """
     result = await db.execute(
         select(Complaint)
-        .where(Complaint.ticket_id == ticket_id)
+        .where(Complaint.ticket_id == ticket_id.strip().upper())
         .options(selectinload(Complaint.department), selectinload(Complaint.ward))
     )
     complaint = result.scalar_one_or_none()
@@ -128,7 +165,21 @@ async def track_complaint(
     if not complaint:
         raise HTTPException(status_code=404, detail=f"Ticket {ticket_id} not found")
 
-    return complaint_to_response(complaint)
+    response = complaint_to_response(complaint)
+    is_privileged = current_user is not None and (
+        current_user["user_id"] == complaint.citizen_id
+        or current_user["role"] in ("officer", "admin")
+    )
+    if is_privileged:
+        return response
+    return response.model_copy(update={
+        "original_text": "",
+        "translated_text": None,
+        "latitude": None,
+        "longitude": None,
+        "image_url": None,
+        "image_verification_notes": None,
+    })
 
 
 @router.post("/{complaint_id}/image", response_model=ComplaintResponse)
@@ -139,11 +190,6 @@ async def upload_complaint_image(
     db: AsyncSession = Depends(get_db),
 ):
     """Attach an image to an existing complaint."""
-    from sqlalchemy.orm import selectinload
-
-    if file.content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(status_code=400, detail="Only JPEG, PNG, WebP, or GIF images allowed")
-
     result = await db.execute(
         select(Complaint)
         .where(Complaint.id == complaint_id)
@@ -156,14 +202,17 @@ async def upload_complaint_image(
     if complaint.citizen_id != current_user["user_id"] and current_user["role"] not in ("officer", "admin"):
         raise HTTPException(status_code=403, detail="Not allowed")
 
-    ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "jpg"
-    filename = f"{uuid.uuid4().hex}.{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
+    contents = await read_limited(file, settings.MAX_IMAGE_UPLOAD_MB)
+    image_type = detect_image_type(contents)
+    if image_type is None:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, WebP, or GIF images allowed")
 
-    contents = await file.read()
+    filename = f"{uuid.uuid4().hex}.{IMAGE_SIGNATURES[image_type]}"
+    filepath = os.path.join(settings.UPLOAD_DIR, filename)
+
     verification = verify_image_evidence(
         contents,
-        file.content_type,
+        image_type,
         file.filename,
         complaint.category.value if hasattr(complaint.category, "value") else complaint.category,
     )
@@ -191,18 +240,13 @@ async def transcribe_speech(
     Transcribe audio with local Whisper and translate speech to English by default.
     Accepts any audio format the browser's MediaRecorder produces (webm, ogg, mp4).
     """
-    audio_bytes = await file.read()
+    audio_bytes = await read_limited(file, settings.MAX_AUDIO_UPLOAD_MB)
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio file")
 
     try:
-        import asyncio
-        loop = asyncio.get_event_loop()
         # Run blocking Whisper inference in a thread pool so it doesn't block the event loop
-        result = await loop.run_in_executor(
-            None, transcribe_audio, audio_bytes, language or None, translate
-        )
-        return result
-    except Exception as e:
-        logger.error(f"Transcription failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+        return await asyncio.to_thread(transcribe_audio, audio_bytes, language or None, translate)
+    except Exception:
+        logger.exception("Transcription failed")
+        raise HTTPException(status_code=500, detail="Transcription failed. Please try again or type your complaint.")

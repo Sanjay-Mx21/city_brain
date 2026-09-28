@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { complaintAPI } from '../services/api';
+import { complaintAPI, mediaUrl } from '../services/api';
 import { Brain, Search, Loader2, CheckCircle2, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
 import { formatSlaStatus, getSlaClass } from '../utils/sla';
 import { imageVerificationClass, imageVerificationLabel } from '../utils/imageVerification';
@@ -75,7 +75,7 @@ export default function TrackComplaint() {
 
           {complaint.image_url && (
             <div>
-              <img src={complaint.image_url} alt="Complaint" className="w-full max-h-56 object-cover rounded-xl border border-slate-100" />
+              <img src={mediaUrl(complaint.image_url)} alt="Complaint" className="w-full max-h-56 object-cover rounded-xl border border-slate-100" />
               <span className={`inline-flex mt-2 px-2 py-1 rounded text-xs font-medium ${imageVerificationClass(complaint)}`}>
                 {imageVerificationLabel(complaint)}
               </span>

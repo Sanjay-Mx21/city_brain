@@ -73,3 +73,18 @@ def require_role(allowed_roles: list[str]):
             )
         return current_user
     return role_checker
+
+
+optional_security = HTTPBearer(auto_error=False)
+
+
+async def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+) -> Optional[dict]:
+    """Like get_current_user, but returns None for anonymous or invalid tokens."""
+    if credentials is None:
+        return None
+    try:
+        return await get_current_user(credentials)
+    except HTTPException:
+        return None

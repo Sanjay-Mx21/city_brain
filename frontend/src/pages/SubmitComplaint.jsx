@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { complaintAPI } from '../services/api';
+import { complaintAPI, mediaUrl } from '../services/api';
 import { Send, MapPin, Globe, Loader2, CheckCircle2, Image, ExternalLink, Mic, MicOff, AlertTriangle, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { imageVerificationClass, imageVerificationLabel } from '../utils/imageVerification';
@@ -387,7 +387,7 @@ export default function SubmitComplaint() {
 
               {ticket.image_url && (
                 <div className="mb-4">
-                  <img src={ticket.image_url} alt="Complaint" className="w-full max-h-48 object-cover rounded-lg border border-slate-100" />
+                  <img src={mediaUrl(ticket.image_url)} alt="Complaint" className="w-full max-h-48 object-cover rounded-lg border border-slate-100" />
                   <span className={`inline-flex mt-2 px-2 py-1 rounded text-xs font-medium ${imageVerificationClass(ticket)}`}>
                     {imageVerificationLabel(ticket)}
                   </span>
